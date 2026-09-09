@@ -12,6 +12,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ContactsScreen from './src/screens/ContactsScreen';
 import NewRelationScreen from './src/screens/NewRelationScreen';
+import ConfirmRelationScreen from './src/screens/ConfirmRelationScreen';
 import TransferScreen from './src/screens/TransferScreen';
 import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -50,6 +51,11 @@ function App() {
               name="NewRelation"
               component={NewRelationScreen}
               options={{title: '建立可信关系'}}
+            />
+            <Stack.Screen
+              name="ConfirmRelation"
+              component={ConfirmRelationScreen}
+              options={{title: '确认可信关系'}}
             />
             <Stack.Screen
               name="Transfer"

@@ -33,14 +33,23 @@ export default function ContactsScreen({navigation}: Props) {
     return '已撤销';
   };
 
+  const handleContactPress = (item: RelationshipRecord) => {
+    if (item.status === 'active') {
+      navigation.navigate('Transfer', {
+        contactAddress: item.otherUser.toString(),
+      });
+    } else if (item.status === 'pending' && !item.isInitiator) {
+      navigation.navigate('ConfirmRelation', {
+        otherAddress: item.otherUser.toString(),
+      });
+    }
+    // pending + isInitiator: do nothing, waiting for other party
+  };
+
   const renderContact = ({item}: {item: RelationshipRecord}) => (
     <TouchableOpacity
       style={styles.contactCard}
-      onPress={() =>
-        navigation.navigate('Transfer', {
-          contactAddress: item.otherUser.toString(),
-        })
-      }>
+      onPress={() => handleContactPress(item)}>
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>
           {item.otherUser.toString().slice(0, 1).toUpperCase()}

@@ -1,12 +1,6 @@
 import React, {createContext, useContext, useState, useCallback, ReactNode} from 'react';
-import {
-  transact,
-  Web3MobileWallet,
-  AuthorizationResult,
-  AuthorizeAPI,
-  TransactAPI,
-} from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
-import {Connection, PublicKey} from '@solana/web3.js';
+import {transact} from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
+import {Connection, PublicKey, Transaction} from '@solana/web3.js';
 
 interface WalletContextType {
   publicKey: PublicKey | null;
@@ -32,13 +26,12 @@ export function WalletProvider({children}: WalletProviderProps) {
   const [publicKey, setPublicKey] = useState<PublicKey | null>(null);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [wallet, setWallet] = useState<Web3MobileWallet | null>(null);
 
   const connect = useCallback(async () => {
     setConnecting(true);
     try {
-      await transact(async (api: AuthorizeAPI & TransactAPI) => {
-        const authResult = await api.authorize({
+      await transact(async (walletApi) => {
+        const authResult = await walletApi.authorize({
           cluster: 'devnet',
           identity: {
             name: 'TrustPort',
@@ -52,7 +45,6 @@ export function WalletProvider({children}: WalletProviderProps) {
           const pk = new PublicKey(account.address);
           setPublicKey(pk);
           setConnected(true);
-          setWallet(api as unknown as Web3MobileWallet);
         }
       });
     } catch (error) {
@@ -64,40 +56,37 @@ export function WalletProvider({children}: WalletProviderProps) {
   }, []);
 
   const disconnect = useCallback(async () => {
-    if (wallet) {
-      try {
-        await transact(async (api: AuthorizeAPI & TransactAPI) => {
-          await api.deauthorize({auth_token: ''});
-        });
-      } catch (error) {
-        console.error('Disconnect error:', error);
-      }
+    try {
+      await transact(async (walletApi) => {
+        await walletApi.deauthorize({auth_token: ''});
+      });
+    } catch (error) {
+      console.error('Disconnect error:', error);
     }
     setPublicKey(null);
     setConnected(false);
-    setWallet(null);
-  }, [wallet]);
+  }, []);
 
   const signAndSendTransaction = useCallback(
-    async (transaction: any): Promise<string> => {
-      if (!wallet || !publicKey) {
+    async (transaction: Transaction): Promise<string> => {
+      if (!publicKey) {
         throw new Error('Wallet not connected');
       }
 
       try {
-        const result = await transact(async (api: AuthorizeAPI & TransactAPI) => {
-          const signedTransactions = await api.signAndSendTransactions({
+        const signatures = await transact(async (walletApi) => {
+          const result = await walletApi.signAndSendTransactions({
             transactions: [transaction],
           });
-          return signedTransactions.signatures[0];
+          return result;
         });
-        return result;
+        return Array.isArray(signatures) ? signatures[0] : signatures;
       } catch (error) {
         console.error('Transaction failed:', error);
         throw error;
       }
     },
-    [wallet, publicKey],
+    [publicKey],
   );
 
   const value: WalletContextType = {
