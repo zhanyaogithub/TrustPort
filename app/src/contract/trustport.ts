@@ -15,6 +15,7 @@ import {
 } from "@solana/web3.js";
 import { BorshAccountsCoder, BorshInstructionCoder } from "@coral-xyz/anchor";
 import { IDL, TrustRelationship, RelationshipStatus } from "../idl/trustport";
+import { sha256 } from "@noble/hashes/sha256";
 import * as Buffer from "buffer";
 
 // Program ID
@@ -314,8 +315,7 @@ export async function computePassphraseHash(
     ...sortedB.toBuffer(),
   ]);
 
-  const hashBuffer = await crypto.subtle.digest("SHA-256", combined);
-  return Array.from(new Uint8Array(hashBuffer));
+  return Array.from(sha256(combined));
 }
 
 /**

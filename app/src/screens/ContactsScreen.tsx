@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect} from 'react';
 import {
   View,
   Text,
@@ -6,67 +6,95 @@ import {
   TouchableOpacity,
   SafeAreaView,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
+import {useContract, RelationshipRecord} from '../hooks/useContract';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Contacts'>;
 };
 
-interface Contact {
-  id: string;
-  address: string;
-  name: string;
-  status: 'active' | 'pending';
-}
-
 export default function ContactsScreen({navigation}: Props) {
-  const [contacts, setContacts] = useState<Contact[]>([
-    // Mock data - will be loaded from chain
-    {
-      id: '1',
-      address: '7xKX...abc1',
-      name: 'Alice',
-      status: 'active',
-    },
-    {
-      id: '2',
-      address: '9yZy...def2',
-      name: 'Bob',
-      status: 'pending',
-    },
-  ]);
+  const {relationships, loading, refreshRelationships} = useContract();
 
-  const renderContact = ({item}: {item: Contact}) => (
+  useEffect(() => {
+    refreshRelationships();
+  }, []);
+
+  const shortenAddress = (addr: string) => {
+    return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+  };
+
+  const getStatusLabel = (r: RelationshipRecord) => {
+    if (r.status === 'active') return '已激活';
+    if (r.status === 'pending') return r.isInitiator ? '待对方确认' : '待我确认';
+    return '已撤销';
+  };
+
+  const renderContact = ({item}: {item: RelationshipRecord}) => (
     <TouchableOpacity
       style={styles.contactCard}
-      onPress={() => navigation.navigate('Transfer', {contactAddress: item.address})}>
+      onPress={() =>
+        navigation.navigate('Transfer', {
+          contactAddress: item.otherUser.toString(),
+        })
+      }>
       <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{item.name[0]}</Text>
+        <Text style={styles.avatarText}>
+          {item.otherUser.toString().slice(0, 1).toUpperCase()}
+        </Text>
       </View>
       <View style={styles.contactInfo}>
-        <Text style={styles.contactName}>{item.name}</Text>
-        <Text style={styles.contactAddress}>{item.address}</Text>
+        <Text style={styles.contactName}>
+          {shortenAddress(item.otherUser.toString())}
+        </Text>
+        <Text style={styles.contactAddress}>
+          {item.isInitiator ? '我发起' : '对方发起'}
+        </Text>
       </View>
       <View
         style={[
           styles.statusBadge,
-          item.status === 'active' ? styles.activeBadge : styles.pendingBadge,
+          item.status === 'active'
+            ? styles.activeBadge
+            : item.status === 'pending'
+            ? styles.pendingBadge
+            : styles.revokedBadge,
         ]}>
-        <Text style={styles.statusText}>
-          {item.status === 'active' ? '已确认' : '待确认'}
+        <Text
+          style={[
+            styles.statusText,
+            item.status === 'active'
+              ? styles.activeText
+              : item.status === 'pending'
+              ? styles.pendingText
+              : styles.revokedText,
+          ]}>
+          {getStatusLabel(item)}
         </Text>
       </View>
     </TouchableOpacity>
   );
 
+  if (loading && relationships.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6366f1" />
+          <Text style={styles.loadingText}>加载中...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
-        data={contacts}
+        data={relationships.filter(r => r.status !== 'revoked')}
         renderItem={renderContact}
-        keyExtractor={item => item.id}
+        keyExtractor={item => item.pda.toString()}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -92,6 +120,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1a2e',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#888',
+    marginTop: 12,
+    fontSize: 14,
   },
   list: {
     padding: 16,
@@ -142,20 +180,22 @@ const styles = StyleSheet.create({
   pendingBadge: {
     backgroundColor: 'rgba(251, 191, 36, 0.2)',
   },
+  revokedBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+  },
   statusText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  activeBadge: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(74, 222, 128, 0.2)',
+  activeText: {
+    color: '#4ade80',
   },
-  pendingBadge: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+  pendingText: {
+    color: '#fbbf24',
   },
-  activeBadge: {},
-  pendingBadge: {},
+  revokedText: {
+    color: '#ef4444',
+  },
   empty: {
     flex: 1,
     justifyContent: 'center',

@@ -11,6 +11,7 @@ import {
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import {useWallet} from '../hooks/useWallet';
+import {useContract} from '../hooks/useContract';
 import {LAMPORTS_PER_SOL} from '@solana/web3.js';
 
 type Props = {
@@ -19,14 +20,17 @@ type Props = {
 
 export default function HomeScreen({navigation}: Props) {
   const {publicKey, connection, disconnect} = useWallet();
+  const {refreshRelationships, getActiveCount, getPendingCount, loading} = useContract();
   const [balance, setBalance] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [trustedCount, setTrustedCount] = useState(0);
 
   useEffect(() => {
     loadBalance();
-    // TODO: Load trusted relationships count from chain
+    refreshRelationships();
   }, [publicKey]);
+
+  const trustedCount = getActiveCount();
+  const pendingCount = getPendingCount();
 
   const loadBalance = async () => {
     if (!publicKey) return;
@@ -40,7 +44,7 @@ export default function HomeScreen({navigation}: Props) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadBalance();
+    await Promise.all([loadBalance(), refreshRelationships()]);
     setRefreshing(false);
   };
 
@@ -84,7 +88,7 @@ export default function HomeScreen({navigation}: Props) {
             <Text style={styles.statLabel}>可信联系人</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statNumber}>{pendingCount}</Text>
             <Text style={styles.statLabel}>待处理</Text>
           </View>
         </View>

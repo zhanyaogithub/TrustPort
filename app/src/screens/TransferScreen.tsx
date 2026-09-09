@@ -9,18 +9,18 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
-import {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {NativeStackNavigationProp, NativeStackScreenProps} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import {useWallet} from '../hooks/useWallet';
-import {PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL} from '@solana/web3.js';
+import {useContract} from '../hooks/useContract';
+import {PublicKey, LAMPORTS_PER_SOL} from '@solana/web3.js';
 
-type Props = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'Transfer'>;
-};
+type Props = NativeStackScreenProps<RootStackParamList, 'Transfer'>;
 
-export default function TransferScreen({navigation}: Props) {
+export default function TransferScreen({navigation, route}: Props) {
   const {publicKey, connection, signAndSendTransaction} = useWallet();
-  const [recipient, setRecipient] = useState('');
+  const {guardedTransfer, hasActiveRelationship, refreshRelationships} = useContract();
+  const [recipient, setRecipient] = useState(route.params?.contactAddress || '');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState<number>(0);
@@ -59,6 +59,14 @@ export default function TransferScreen({navigation}: Props) {
       Alert.alert('错误', '余额不足');
       return false;
     }
+    // Check if there's an active trust relationship with the recipient
+    if (!hasActiveRelationship(recipient)) {
+      Alert.alert(
+        '无法转账',
+        '你与收款方之间没有激活的可信关系。请先建立并确认可信关系后再转账。',
+      );
+      return false;
+    }
     return true;
   };
 
@@ -71,23 +79,11 @@ export default function TransferScreen({navigation}: Props) {
 
     setLoading(true);
     try {
-      // Create transfer transaction
-      const transaction = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey: new PublicKey(recipient),
-          lamports: parseFloat(amount) * LAMPORTS_PER_SOL,
-        }),
+      const signature = await guardedTransfer(
+        recipient,
+        parseFloat(amount),
       );
 
-      // Get latest blockhash
-      const {blockhash} = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign and send
-      const signature = await signAndSendTransaction(transaction);
-      
       Alert.alert(
         '转账成功',
         `交易签名: ${signature.slice(0, 20)}...`,
@@ -140,9 +136,9 @@ export default function TransferScreen({navigation}: Props) {
         </View>
 
         <View style={styles.warning}>
-          <Text style={styles.warningIcon}>⚠️</Text>
+          <Text style={styles.warningIcon}>🛡️</Text>
           <Text style={styles.warningText}>
-            请确认对方是你的可信联系人。转账后无法撤回。
+            此转账受可信关系保护。只有与你有激活可信关系的联系人才能接收。
           </Text>
         </View>
       </ScrollView>

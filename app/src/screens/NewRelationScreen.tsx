@@ -12,8 +12,8 @@ import {
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import {useWallet} from '../hooks/useWallet';
+import {useContract} from '../hooks/useContract';
 import {PublicKey} from '@solana/web3.js';
-import * as crypto from 'crypto';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'NewRelation'>;
@@ -23,10 +23,12 @@ type Step = 'address' | 'passphrase' | 'confirm' | 'success';
 
 export default function NewRelationScreen({navigation}: Props) {
   const {publicKey} = useWallet();
+  const {initRelationship} = useContract();
   const [step, setStep] = useState<Step>('address');
   const [otherAddress, setOtherAddress] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const validateAddress = (addr: string): boolean => {
     try {
@@ -65,21 +67,15 @@ export default function NewRelationScreen({navigation}: Props) {
   };
 
   const submitRelationship = async () => {
+    setSubmitting(true);
     try {
-      // Generate passphrase hash: SHA-256(passphrase + user_a + user_b)
-      // This is a simplified version - actual implementation should use proper crypto
-      const sortedAddresses = [publicKey!.toString(), otherAddress].sort();
-      const data = passphrase + sortedAddresses[0] + sortedAddresses[1];
-      const hash = crypto.createHash('sha256').update(data).digest();
-
-      // TODO: Call smart contract to init_relationship
-      // For now, simulate success
-      setTimeout(() => {
-        setStep('success');
-      }, 1000);
-    } catch (error) {
-      Alert.alert('错误', '创建关系失败，请重试');
+      await initRelationship(otherAddress, passphrase);
+      setStep('success');
+    } catch (error: any) {
+      Alert.alert('错误', error.message || '创建关系失败，请重试');
       console.error(error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -181,9 +177,12 @@ export default function NewRelationScreen({navigation}: Props) {
               />
             </View>
             {renderStep()}
-            <TouchableOpacity style={styles.button} onPress={handleNext}>
+            <TouchableOpacity
+              style={[styles.button, submitting && styles.buttonDisabled]}
+              onPress={handleNext}
+              disabled={submitting}>
               <Text style={styles.buttonText}>
-                {step === 'confirm' ? '提交' : '下一步'}
+                {submitting ? '提交中...' : step === 'confirm' ? '提交' : '下一步'}
               </Text>
             </TouchableOpacity>
           </>
@@ -244,6 +243,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   buttonText: {
     color: '#fff',

@@ -4,6 +4,7 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 import {WalletProvider} from './src/hooks/useWallet';
+import {ContractProvider} from './src/hooks/useContract';
 import {RootStackParamList} from './src/navigation/types';
 
 // Screens
@@ -21,7 +22,8 @@ function App() {
   return (
     <SafeAreaProvider>
       <WalletProvider>
-        <NavigationContainer>
+        <ContractProvider>
+          <NavigationContainer>
           <Stack.Navigator
             initialRouteName="Onboarding"
             screenOptions={{
@@ -66,6 +68,7 @@ function App() {
             />
           </Stack.Navigator>
         </NavigationContainer>
+        </ContractProvider>
       </WalletProvider>
     </SafeAreaProvider>
   );
