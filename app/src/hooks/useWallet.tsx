@@ -36,6 +36,7 @@ export function WalletProvider({children}: WalletProviderProps) {
   const [isLocalWallet, setIsLocalWallet] = useState(false);
   const [localKeypair, setLocalKeypair] = useState<Keypair | null>(null);
   const [sessionRestored, setSessionRestored] = useState(false);
+  const authTokenRef = React.useRef<string | null>(null);
 
   // Restore session on mount
   useEffect(() => {
@@ -46,11 +47,14 @@ export function WalletProvider({children}: WalletProviderProps) {
     try {
       const sessionData = await AsyncStorage.getItem(WALLET_SESSION_KEY);
       if (sessionData) {
-        const {publicKey: pkStr, isLocal: isLocal} = JSON.parse(sessionData);
+        const {publicKey: pkStr, isLocal: isLocal, authToken} = JSON.parse(sessionData);
         console.log('[restoreSession] Found saved session:', pkStr, 'isLocal:', isLocal);
         setPublicKey(new PublicKey(pkStr));
         setConnected(true);
         setIsLocalWallet(isLocal);
+        if (authToken) {
+          authTokenRef.current = authToken;
+        }
       } else {
         console.log('[restoreSession] No saved session found');
       }
@@ -61,9 +65,9 @@ export function WalletProvider({children}: WalletProviderProps) {
     }
   };
 
-  const saveSession = async (pk: PublicKey, isLocal: boolean) => {
+  const saveSession = async (pk: PublicKey, isLocal: boolean, authToken?: string) => {
     try {
-      const sessionData = JSON.stringify({publicKey: pk.toBase58(), isLocal});
+      const sessionData = JSON.stringify({publicKey: pk.toBase58(), isLocal, authToken: authToken || authTokenRef.current});
       await AsyncStorage.setItem(WALLET_SESSION_KEY, sessionData);
       console.log('[saveSession] Session saved:', pk.toBase58());
     } catch (error: any) {
@@ -73,6 +77,7 @@ export function WalletProvider({children}: WalletProviderProps) {
 
   const clearSession = async () => {
     try {
+      authTokenRef.current = null;
       await AsyncStorage.removeItem(WALLET_SESSION_KEY);
       console.log('[clearSession] Session cleared');
     } catch (error: any) {
@@ -185,7 +190,13 @@ export function WalletProvider({children}: WalletProviderProps) {
             const pk = new PublicKey(publicKeyStr);
             setPublicKey(pk);
             setConnected(true);
-            await saveSession(pk, false);
+            
+            // Save auth_token for future reauthorize() calls
+            const authToken = authResult.auth_token || null;
+            authTokenRef.current = authToken;
+            console.log('[connect] Auth token saved:', authToken ? 'yes' : 'null');
+            
+            await saveSession(pk, false, authToken);
             console.log('[connect] Connection successful with address:', pk.toBase58());
           } else {
             console.error('[connect] No accounts in authResult');
@@ -266,9 +277,53 @@ export function WalletProvider({children}: WalletProviderProps) {
         return signature;
       }
 
-      // MWA wallet: use wallet adapter
+      // MWA wallet: use wallet adapter with reauthorize
       try {
         const signatures = await transact(async (walletApi) => {
+          // Each transact() creates a new session - must reauthorize first
+          if (authTokenRef.current) {
+            try {
+              console.log('[signAndSend] Reauthorizing with saved auth_token...');
+              const reauthResult = await walletApi.reauthorize({
+                auth_token: authTokenRef.current,
+              });
+              // Update auth_token if a new one was issued
+              if (reauthResult.auth_token) {
+                authTokenRef.current = reauthResult.auth_token;
+                await saveSession(publicKey, false, reauthResult.auth_token);
+              }
+              console.log('[signAndSend] Reauthorize succeeded');
+            } catch (reauthError: any) {
+              console.warn('[signAndSend] Reauthorize failed, trying full authorize:', reauthError.message);
+              // Fall back to full authorize
+              const authResult = await walletApi.authorize({
+                cluster: 'mainnet-beta',
+                identity: {
+                  name: 'TrustPort',
+                  uri: 'https://github.com/zhanyaogithub/TrustPort',
+                },
+              });
+              if (authResult.auth_token) {
+                authTokenRef.current = authResult.auth_token;
+                await saveSession(publicKey, false, authResult.auth_token);
+              }
+            }
+          } else {
+            // No saved token, do full authorize
+            console.log('[signAndSend] No auth_token, doing full authorize...');
+            const authResult = await walletApi.authorize({
+              cluster: 'mainnet-beta',
+              identity: {
+                name: 'TrustPort',
+                uri: 'https://github.com/zhanyaogithub/TrustPort',
+              },
+            });
+            if (authResult.auth_token) {
+              authTokenRef.current = authResult.auth_token;
+              await saveSession(publicKey, false, authResult.auth_token);
+            }
+          }
+
           const result = await walletApi.signAndSendTransactions({
             transactions: [transaction],
           });

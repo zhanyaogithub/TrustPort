@@ -5,8 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  AppState,
-  AppStateStatus,
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
@@ -20,33 +18,20 @@ type Props = {
 export default function OnboardingScreen({navigation}: Props) {
   const {connect, connecting, connected, sessionRestored} = useWallet();
   const [pickerVisible, setPickerVisible] = React.useState(false);
+  const hasNavigated = React.useRef(false);
 
-  // Auto-navigate if session is restored and connected
+  // Single navigation effect: only navigate when this screen is focused
+  // and connected becomes true. The ref prevents double-navigation when
+  // Activity is recreated (e.g., returning from ZXing camera on Samsung).
   React.useEffect(() => {
-    if (sessionRestored && connected) {
-      console.log('[Onboarding] Session restored, navigating to Home');
-      navigation.navigate('Home');
-    }
-  }, [sessionRestored, connected]);
-
-  // Auto-navigate when connected becomes true (after MWA authorization completes)
-  React.useEffect(() => {
-    if (connected) {
-      console.log('[Onboarding] Connected state changed to true, navigating to Home');
-      navigation.navigate('Home');
-    }
-  }, [connected]);
-
-  // Listen for AppState changes to detect return from wallet app
-  React.useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active' && connected) {
-        console.log('[Onboarding] App returned to foreground and connected, navigating to Home');
+    if (connected && !hasNavigated.current) {
+      if (navigation.isFocused()) {
+        hasNavigated.current = true;
+        console.log('[Onboarding] Navigating to Home');
         navigation.navigate('Home');
       }
-    });
-    return () => subscription.remove();
-  }, [connected]);
+    }
+  }, [connected, sessionRestored, navigation]);
 
   const handleConnect = () => {
     // Open wallet picker to let user choose which wallet to connect
