@@ -41,6 +41,38 @@ export default function NewRelationScreen({navigation}: Props) {
     }
   };
 
+  // Extract Solana address from various QR code formats
+  const extractAddress = (content: string): string | null => {
+    const trimmed = content.trim();
+
+    // Direct base58 address (32-44 chars)
+    if (validateAddress(trimmed)) {
+      return trimmed;
+    }
+
+    // solana:<address> URI scheme
+    if (trimmed.startsWith('solana:')) {
+      const addr = trimmed.replace('solana:', '').split('?')[0].split('/')[0];
+      if (validateAddress(addr)) return addr;
+    }
+
+    // URL with address parameter, e.g. https://.../?address=<addr>
+    try {
+      const url = new URL(trimmed);
+      const addrParam = url.searchParams.get('address') || url.searchParams.get('addr') || url.searchParams.get('to');
+      if (addrParam && validateAddress(addrParam)) return addrParam;
+    } catch {}
+
+    // Try to find any base58-looking string in the content
+    const base58Regex = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
+    const match = trimmed.match(base58Regex);
+    if (match && validateAddress(match[0])) {
+      return match[0];
+    }
+
+    return null;
+  };
+
   const handleScanQR = async () => {
     try {
       const QRScanner = NativeModules.QRScanner;
@@ -49,14 +81,21 @@ export default function NewRelationScreen({navigation}: Props) {
         return;
       }
       const result = await QRScanner.scan();
-      if (result && validateAddress(result)) {
-        setOtherAddress(result);
-        Alert.alert('扫描成功', `地址: ${result.slice(0, 8)}...${result.slice(-4)}`);
-      } else if (result) {
-        Alert.alert('无效地址', '扫描到的内容不是有效的 Solana 地址');
+      console.log('[handleScanQR] Scan result:', result?.slice(0, 50));
+
+      if (!result) return;
+
+      const address = extractAddress(result);
+      if (address) {
+        setOtherAddress(address);
+        // Brief feedback — address is already visible in the input field
+        Alert.alert('扫码成功', `已填入地址:\n${address.slice(0, 8)}...${address.slice(-4)}`);
+      } else {
+        Alert.alert('无法识别', `二维码内容不是有效的 Solana 地址:\n${result.slice(0, 50)}...`);
       }
     } catch (error: any) {
       if (error.code !== 'SCAN_CANCELLED') {
+        console.error('[handleScanQR] Error:', error.message);
         Alert.alert('扫描失败', error.message || '请重试');
       }
     }
