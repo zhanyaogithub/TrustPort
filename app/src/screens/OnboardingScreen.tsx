@@ -58,6 +58,9 @@ export default function OnboardingScreen({navigation}: Props) {
     setPickerVisible(false);
     try {
       await connect(wallet.packageName);
+      // Navigate directly after successful connect - don't rely on useEffect/AppState
+      console.log('[Onboarding] Connect resolved, navigating to Home directly');
+      navigation.navigate('Home');
     } catch (error: any) {
       console.error('[Onboarding] Connection failed:', error.message);
     }

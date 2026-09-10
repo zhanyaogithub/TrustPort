@@ -85,11 +85,6 @@ export function WalletProvider({children}: WalletProviderProps) {
     setConnecting(true);
     setIsLocalWallet(false);
 
-    // Add timeout to detect hanging authorize calls
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('MWA authorize timeout after 30s')), 30000);
-    });
-
     try {
       console.log('[connect] Entering transact...');
 
@@ -100,12 +95,16 @@ export function WalletProvider({children}: WalletProviderProps) {
         console.log('[connect] Config targeting:', targetPackage);
       }
 
-      const transactPromise = transact(async (walletApi) => {
+      // Note: No JS-side timeout. React Native JS timers are paused when app
+      // goes to background (to open wallet), causing delayed firing and race
+      // conditions with the native MWA session. The native MWA library handles
+      // timeouts internally via ASSOCIATION_TIMEOUT_MS.
+      await transact(async (walletApi) => {
         console.log('[connect] walletApi received:', walletApi ? 'yes' : 'no');
         console.log('[connect] walletApi methods:', Object.keys(walletApi || {}).join(', '));
         console.log('[connect] Calling walletApi.authorize with params:', JSON.stringify({
           cluster: 'mainnet-beta',
-          identity: {name: 'TrustPort', uri: 'https://trustport.app', icon: 'icon.png'},
+          identity: {name: 'TrustPort', uri: 'https://github.com/zhanyaogithub/TrustPort'},
         }));
 
         try {
@@ -113,8 +112,7 @@ export function WalletProvider({children}: WalletProviderProps) {
             cluster: 'mainnet-beta',
             identity: {
               name: 'TrustPort',
-              uri: 'https://trustport.app',
-              icon: 'icon.png',
+              uri: 'https://github.com/zhanyaogithub/TrustPort',
             },
           });
 
@@ -199,19 +197,13 @@ export function WalletProvider({children}: WalletProviderProps) {
           throw authorizeError;
         }
       }, Object.keys(config).length > 0 ? config : undefined);
-      
-      // Race between transact and timeout
-      await Promise.race([transactPromise, timeoutPromise]);
-      
+
       console.log('[connect] Transact completed successfully');
     } catch (error: any) {
       console.error('[connect] Failed:', error.message);
       console.error('[connect] Error name:', error.name);
       console.error('[connect] Error stack:', error.stack);
       console.error('[connect] Error code:', error.code);
-      if (error.message.includes('timeout')) {
-        console.error('[connect] MWA authorization timed out - Phantom may not be responding');
-      }
       throw error;
     } finally {
       setConnecting(false);
