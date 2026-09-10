@@ -40,7 +40,10 @@ function App() {
             <Stack.Screen
               name="Home"
               component={HomeScreen}
-              options={{title: 'TrustPort'}}
+              options={{
+                title: 'TrustPort',
+                headerLeft: () => null, // Disable back button
+              }}
             />
             <Stack.Screen
               name="Contacts"

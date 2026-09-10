@@ -18,8 +18,9 @@ import { IDL, TrustRelationship, RelationshipStatus } from "../idl/trustport";
 import { sha256 } from "@noble/hashes/sha256";
 import * as Buffer from "buffer";
 
-// Program ID
-export const TRUSTPORT_PROGRAM_ID = new PublicKey(IDL.address);
+// Program ID - with defensive check for module loading issues
+const PROGRAM_ADDRESS = IDL?.address || "5qYmGbKTXkd9KRAbJYtPwGsqsYwHRjCseRzNPSGySztp";
+export const TRUSTPORT_PROGRAM_ID = new PublicKey(PROGRAM_ADDRESS);
 
 // ============================================================================
 // PDA Derivation

@@ -22,6 +22,44 @@ import {
 import {sha256} from '@noble/hashes/sha256';
 
 // ============================================================================
+// Base58 encoding utility (no external dependency needed)
+// ============================================================================
+
+const BASE58_ALPHABET =
+  '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function encodeBase58(bytes: Uint8Array): string {
+  const zeroes: number[] = [];
+  for (let i = 0; i < bytes.length && bytes[i] === 0; i++) {
+    zeroes.push(i);
+  }
+  let length = 0;
+  const b58 = new Array(bytes.length * 2).fill(0);
+  for (let i = zeroes.length; i < bytes.length; i++) {
+    let carry = bytes[i];
+    let j = 0;
+    for (let k = b58.length - 1; k >= 0; k--, j++) {
+      if (carry === 0 && j >= length) break;
+      carry += 256 * b58[k];
+      b58[k] = carry % 58;
+      carry = (carry / 58) | 0;
+    }
+    length = j;
+  }
+  let it = b58.length - length;
+  while (it < b58.length && b58[it] === 0) it++;
+  let str = '1'.repeat(zeroes.length);
+  for (; it < b58.length; it++) str += BASE58_ALPHABET[b58[it]];
+  return str;
+}
+
+// TrustRelationship account discriminator (first 8 bytes of SHA256("account:TrustRelationship"))
+const DISCRIMINATOR_BYTES = new Uint8Array([
+  164, 132, 69, 226, 50, 147, 207, 214,
+]);
+const DISCRIMINATOR_B58 = encodeBase58(DISCRIMINATOR_BYTES);
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -117,19 +155,24 @@ export function ContractProvider({children}: ContractProviderProps) {
    */
   const refreshRelationships = useCallback(async () => {
     if (!publicKey) return;
+    
+    // Check if contract module is properly loaded
+    if (typeof TRUSTPORT_PROGRAM_ID === 'undefined' || !TRUSTPORT_PROGRAM_ID) {
+      console.warn('[useContract] TRUSTPORT_PROGRAM_ID not loaded, skipping relationship query');
+      return;
+    }
+    
     setLoading(true);
     try {
-      // Get all program accounts
+      // Get all program accounts with TrustRelationship discriminator
       const accounts = await connection.getProgramAccounts(
         TRUSTPORT_PROGRAM_ID,
         {
           filters: [
-            // TrustRelationship discriminator (8 bytes)
             {
               memcmp: {
                 offset: 0,
-                bytes: Uint8Array.from([164, 132, 69, 226, 50, 147, 207, 214])
-                  .reduce((str, byte) => str + String.fromCharCode(byte), ''),
+                bytes: DISCRIMINATOR_B58,
               },
             },
           ],

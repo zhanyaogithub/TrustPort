@@ -4,32 +4,77 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   SafeAreaView,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import {useWallet} from '../hooks/useWallet';
+import WalletPicker, {WalletInfo} from '../components/WalletPicker';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Onboarding'>;
 };
 
 export default function OnboardingScreen({navigation}: Props) {
-  const {connect, connecting, connected} = useWallet();
+  const {connect, connecting, connected, sessionRestored} = useWallet();
+  const [pickerVisible, setPickerVisible] = React.useState(false);
 
-  const handleConnect = async () => {
-    try {
-      await connect();
+  // Auto-navigate if session is restored and connected
+  React.useEffect(() => {
+    if (sessionRestored && connected) {
+      console.log('[Onboarding] Session restored, navigating to Home');
       navigation.navigate('Home');
-    } catch (error) {
-      console.error('Connection failed:', error);
+    }
+  }, [sessionRestored, connected]);
+
+  // Auto-navigate when connected becomes true (after MWA authorization completes)
+  React.useEffect(() => {
+    if (connected) {
+      console.log('[Onboarding] Connected state changed to true, navigating to Home');
+      navigation.navigate('Home');
+    }
+  }, [connected]);
+
+  // Listen for AppState changes to detect return from wallet app
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && connected) {
+        console.log('[Onboarding] App returned to foreground and connected, navigating to Home');
+        navigation.navigate('Home');
+      }
+    });
+    return () => subscription.remove();
+  }, [connected]);
+
+  const handleConnect = () => {
+    // Open wallet picker to let user choose which wallet to connect
+    setPickerVisible(true);
+  };
+
+  const handleWalletSelect = async (wallet: WalletInfo) => {
+    console.log('[Onboarding] Selected wallet:', wallet.appName, wallet.packageName);
+    setPickerVisible(false);
+    try {
+      await connect(wallet.packageName);
+    } catch (error: any) {
+      console.error('[Onboarding] Connection failed:', error.message);
     }
   };
 
-  if (connected) {
-    navigation.navigate('Home');
-    return null;
+  const handlePickerCancel = () => {
+    setPickerVisible(false);
+  };
+
+  if (!sessionRestored) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          <Text style={styles.loadingText}>加载中...</Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -56,19 +101,28 @@ export default function OnboardingScreen({navigation}: Props) {
           </View>
         </View>
 
+        {/* MWA Button - Primary */}
         <TouchableOpacity
-          style={[styles.button, connecting && styles.buttonDisabled]}
+          style={[styles.primaryButton, connecting && styles.buttonDisabled]}
           onPress={handleConnect}
-          disabled={connecting}>
-          <Text style={styles.buttonText}>
+          disabled={connecting || pickerVisible}>
+          <Text style={styles.primaryButtonText}>
             {connecting ? '连接中...' : '连接钱包'}
           </Text>
         </TouchableOpacity>
 
         <Text style={styles.hint}>
-          请使用 Seeker 手机上的 Seed Vault 钱包
+          点击后将搜索已安装的钱包应用{'\n'}
+          选择钱包后自动完成授权连接
         </Text>
       </View>
+
+      {/* Wallet Picker Modal */}
+      <WalletPicker
+        visible={pickerVisible}
+        onSelect={handleWalletSelect}
+        onCancel={handlePickerCancel}
+      />
     </SafeAreaView>
   );
 }
@@ -118,16 +172,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
   },
-  button: {
+  primaryButton: {
     backgroundColor: '#6366f1',
-    paddingVertical: 16,
+    paddingVertical: 18,
     borderRadius: 12,
     alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#6366f1',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
-  buttonText: {
+  primaryButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
@@ -137,5 +197,10 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 12,
     marginTop: 16,
+  },
+  loadingText: {
+    textAlign: 'center',
+    color: '#fff',
+    fontSize: 18,
   },
 });

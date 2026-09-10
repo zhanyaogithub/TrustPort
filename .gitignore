@@ -47,12 +47,19 @@ test-ledger/
 
 # React Native
 app/android/app/build/
+app/android/build/
 app/android/.gradle/
 app/android/local.properties
 app/ios/Pods/
 app/ios/build/
 app/ios/*.xcworkspace
 app/ios/*.xcodeproj/xcuserdata/
+
+# APK files
+*.apk
+
+# JS bundle (regenerated on build)
+app/android/app/src/main/assets/index.android.bundle
 
 # TypeScript
 *.tsbuildinfo

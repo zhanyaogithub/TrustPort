@@ -8,12 +8,14 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  NativeModules,
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import {useWallet} from '../hooks/useWallet';
 import {useContract} from '../hooks/useContract';
 import {PublicKey} from '@solana/web3.js';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'NewRelation'>;
@@ -36,6 +38,46 @@ export default function NewRelationScreen({navigation}: Props) {
       return true;
     } catch {
       return false;
+    }
+  };
+
+  const handleScanQR = async () => {
+    try {
+      const QRScanner = NativeModules.QRScanner;
+      if (!QRScanner) {
+        Alert.alert('错误', 'QR 扫描模块不可用');
+        return;
+      }
+      const result = await QRScanner.scan();
+      if (result && validateAddress(result)) {
+        setOtherAddress(result);
+        Alert.alert('扫描成功', `地址: ${result.slice(0, 8)}...${result.slice(-4)}`);
+      } else if (result) {
+        Alert.alert('无效地址', '扫描到的内容不是有效的 Solana 地址');
+      }
+    } catch (error: any) {
+      if (error.code !== 'SCAN_CANCELLED') {
+        Alert.alert('扫描失败', error.message || '请重试');
+      }
+    }
+  };
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      const content = await Clipboard.getString();
+      if (!content || content.trim().length === 0) {
+        Alert.alert('剪贴板为空', '请先复制一个 Solana 钱包地址');
+        return;
+      }
+      const trimmed = content.trim();
+      if (validateAddress(trimmed)) {
+        setOtherAddress(trimmed);
+        Alert.alert('粘贴成功', `地址: ${trimmed.slice(0, 8)}...${trimmed.slice(-4)}`);
+      } else {
+        Alert.alert('无效地址', `剪贴板内容不是有效的 Solana 地址:\n${trimmed.slice(0, 30)}...`);
+      }
+    } catch (error: any) {
+      Alert.alert('错误', '无法读取剪贴板内容');
     }
   };
 
@@ -95,6 +137,20 @@ export default function NewRelationScreen({navigation}: Props) {
               onChangeText={setOtherAddress}
               placeholderTextColor="#666"
             />
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleScanQR}>
+                <Text style={styles.actionButtonIcon}>📷</Text>
+                <Text style={styles.actionButtonText}>扫描二维码</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handlePasteFromClipboard}>
+                <Text style={styles.actionButtonIcon}>📋</Text>
+                <Text style={styles.actionButtonText}>从剪贴板粘贴</Text>
+              </TouchableOpacity>
+            </View>
           </>
         );
       case 'passphrase':
@@ -283,6 +339,32 @@ const styles = StyleSheet.create({
   },
   successButtonText: {
     color: '#fff',
+    fontWeight: '600',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    marginBottom: 24,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#2a2a4e',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#6366f1',
+  },
+  actionButtonIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  actionButtonText: {
+    color: '#6366f1',
+    fontSize: 13,
     fontWeight: '600',
   },
 });

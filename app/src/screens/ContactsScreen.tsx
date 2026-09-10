@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,11 @@ type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Contacts'>;
 };
 
+type TabFilter = 'all' | 'sent' | 'received';
+
 export default function ContactsScreen({navigation}: Props) {
   const {relationships, loading, refreshRelationships} = useContract();
+  const [activeTab, setActiveTab] = useState<TabFilter>('all');
 
   useEffect(() => {
     refreshRelationships();
@@ -43,14 +46,30 @@ export default function ContactsScreen({navigation}: Props) {
         otherAddress: item.otherUser.toString(),
       });
     }
-    // pending + isInitiator: do nothing, waiting for other party
+    // pending + isInitiator: waiting for other party, no action
   };
+
+  const filteredRelationships = relationships.filter(r => {
+    if (r.status === 'revoked') return false;
+    if (activeTab === 'sent') return r.isInitiator;
+    if (activeTab === 'received') return !r.isInitiator;
+    return true;
+  });
+
+  const sentCount = relationships.filter(r => r.status !== 'revoked' && r.isInitiator).length;
+  const receivedCount = relationships.filter(r => r.status !== 'revoked' && !r.isInitiator).length;
 
   const renderContact = ({item}: {item: RelationshipRecord}) => (
     <TouchableOpacity
-      style={styles.contactCard}
+      style={[
+        styles.contactCard,
+        item.status === 'pending' && item.isInitiator && styles.sentRequestCard,
+      ]}
       onPress={() => handleContactPress(item)}>
-      <View style={styles.avatar}>
+      <View style={[
+        styles.avatar,
+        item.status === 'active' ? styles.avatarActive : styles.avatarPending,
+      ]}>
         <Text style={styles.avatarText}>
           {item.otherUser.toString().slice(0, 1).toUpperCase()}
         </Text>
@@ -60,7 +79,7 @@ export default function ContactsScreen({navigation}: Props) {
           {shortenAddress(item.otherUser.toString())}
         </Text>
         <Text style={styles.contactAddress}>
-          {item.isInitiator ? '我发起' : '对方发起'}
+          {item.isInitiator ? '我发起的请求' : '对方发起的请求'}
         </Text>
       </View>
       <View
@@ -68,18 +87,14 @@ export default function ContactsScreen({navigation}: Props) {
           styles.statusBadge,
           item.status === 'active'
             ? styles.activeBadge
-            : item.status === 'pending'
-            ? styles.pendingBadge
-            : styles.revokedBadge,
+            : styles.pendingBadge,
         ]}>
         <Text
           style={[
             styles.statusText,
             item.status === 'active'
               ? styles.activeText
-              : item.status === 'pending'
-              ? styles.pendingText
-              : styles.revokedText,
+              : styles.pendingText,
           ]}>
           {getStatusLabel(item)}
         </Text>
@@ -100,19 +115,49 @@ export default function ContactsScreen({navigation}: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Tab Filter */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+          onPress={() => setActiveTab('all')}>
+          <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
+            全部 ({sentCount + receivedCount})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'sent' && styles.tabActive]}
+          onPress={() => setActiveTab('sent')}>
+          <Text style={[styles.tabText, activeTab === 'sent' && styles.tabTextActive]}>
+            已发送 ({sentCount})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'received' && styles.tabActive]}
+          onPress={() => setActiveTab('received')}>
+          <Text style={[styles.tabText, activeTab === 'received' && styles.tabTextActive]}>
+            已收到 ({receivedCount})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
-        data={relationships.filter(r => r.status !== 'revoked')}
+        data={filteredRelationships}
         renderItem={renderContact}
         keyExtractor={item => item.pda.toString()}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>暂无可信联系人</Text>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => navigation.navigate('NewRelation')}>
-              <Text style={styles.addButtonText}>建立第一个可信关系</Text>
-            </TouchableOpacity>
+            <Text style={styles.emptyText}>
+              {activeTab === 'all' ? '暂无可信联系人' :
+               activeTab === 'sent' ? '暂无已发送的请求' : '暂无收到的请求'}
+            </Text>
+            {activeTab === 'all' && (
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => navigation.navigate('NewRelation')}>
+                <Text style={styles.addButtonText}>建立第一个可信关系</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -140,6 +185,31 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
   },
+  tabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+    backgroundColor: '#1a1a2e',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: '#6366f1',
+  },
+  tabText: {
+    color: '#666',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: '#6366f1',
+  },
   list: {
     padding: 16,
   },
@@ -151,13 +221,23 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
+  sentRequestCard: {
+    backgroundColor: '#2a2a3e',
+    borderLeftWidth: 3,
+    borderLeftColor: '#fbbf24',
+  },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#6366f1',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarActive: {
+    backgroundColor: '#6366f1',
+  },
+  avatarPending: {
+    backgroundColor: '#4a4a6e',
   },
   avatarText: {
     fontSize: 20,
