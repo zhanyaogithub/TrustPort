@@ -4,7 +4,7 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 import {WalletProvider} from './src/hooks/useWallet';
-import {ContractProvider} from './src/hooks/useContract';
+import {ContactsProvider} from './src/hooks/useContacts';
 import {RootStackParamList} from './src/navigation/types';
 
 // Screens
@@ -23,7 +23,7 @@ function App() {
   return (
     <SafeAreaProvider>
       <WalletProvider>
-        <ContractProvider>
+        <ContactsProvider>
           <NavigationContainer>
           <Stack.Navigator
             initialRouteName="Onboarding"
@@ -41,8 +41,8 @@ function App() {
               name="Home"
               component={HomeScreen}
               options={{
-                title: 'TrustPort',
-                headerLeft: () => null, // Disable back button
+                headerShown: false,
+                gestureEnabled: false,
               }}
             />
             <Stack.Screen
@@ -53,12 +53,12 @@ function App() {
             <Stack.Screen
               name="NewRelation"
               component={NewRelationScreen}
-              options={{title: '建立可信关系'}}
+              options={{title: '分享二维码'}}
             />
             <Stack.Screen
               name="ConfirmRelation"
               component={ConfirmRelationScreen}
-              options={{title: '确认可信关系'}}
+              options={{title: '扫码确认'}}
             />
             <Stack.Screen
               name="Transfer"
@@ -77,7 +77,7 @@ function App() {
             />
           </Stack.Navigator>
         </NavigationContainer>
-        </ContractProvider>
+        </ContactsProvider>
       </WalletProvider>
     </SafeAreaProvider>
   );

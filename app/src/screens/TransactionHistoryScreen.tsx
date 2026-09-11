@@ -10,15 +10,14 @@ import {
   Linking,
 } from 'react-native';
 import {useWallet} from '../hooks/useWallet';
-import {TRUSTPORT_PROGRAM_ID} from '../contract/trustport';
 import {LAMPORTS_PER_SOL} from '@solana/web3.js';
 
 interface TransactionItem {
-  id: string; // signature
-  type: 'sent' | 'received' | 'init_relation' | 'confirm_relation' | 'revoke_relation' | 'unknown';
-  amount?: number; // in SOL, only for sent/received
-  otherAddress?: string;
-  timestamp: number; // unix seconds
+  id: string;
+  type: 'sent' | 'received';
+  amount: number;
+  otherAddress: string;
+  timestamp: number;
   status: 'confirmed' | 'failed';
 }
 
@@ -47,7 +46,6 @@ export default function TransactionHistoryScreen() {
         const status = sigInfo.err ? 'failed' : 'confirmed';
 
         try {
-          // Fetch full transaction
           const tx = await connection.getTransaction(signature, {
             maxSupportedTransactionVersion: 0,
           });
@@ -58,131 +56,32 @@ export default function TransactionHistoryScreen() {
             k.toString(),
           );
           const myAddress = publicKey.toString();
-          const programIdStr = TRUSTPORT_PROGRAM_ID.toString();
+          const meta = tx.meta;
+          if (!meta) continue;
 
-          // Check if this transaction involves our program
-          const involvesProgram = accountKeys.includes(programIdStr);
+          const myIdx = accountKeys.indexOf(myAddress);
+          if (myIdx === -1) continue;
 
-          if (involvesProgram) {
-            // Parse instruction data to determine type
-            const instructions = tx.transaction.message.compiledInstructions;
-            const programIdx = accountKeys.indexOf(programIdStr);
+          const preBalance = meta.preBalances[myIdx] || 0;
+          const postBalance = meta.postBalances[myIdx] || 0;
+          const diff = postBalance - preBalance;
+          const fee = meta.fee || 0;
 
-            for (const ix of instructions) {
-              if (ix.programIdIndex !== programIdx) continue;
+          if (Math.abs(diff) <= fee) continue;
 
-              const data = ix.data;
-              // Get discriminator (first 8 bytes)
-              if (data.length < 8) continue;
-              const discriminator = Array.from(data.slice(0, 8));
+          const netChange = diff + fee;
+          const amount = Math.abs(netChange) / LAMPORTS_PER_SOL;
+          const otherAddr = accountKeys.find(a => a !== myAddress) || '';
 
-              // init_relationship discriminator
-              const initDisc = [69, 233, 202, 25, 110, 202, 72, 140];
-              // confirm_relationship discriminator
-              const confirmDisc = [65, 174, 126, 35, 247, 54, 218, 38];
-              // revoke_relationship discriminator
-              const revokeDisc = [32, 212, 32, 93, 29, 52, 193, 7];
-              // guarded_transfer discriminator
-              const transferDisc = [101, 14, 194, 73, 126, 140, 118, 221];
-
-              const discMatch = (d: number[]) =>
-                discriminator.length === 8 && d.every((v, i) => v === discriminator[i]);
-
-              if (discMatch(initDisc)) {
-                const otherAddr =
-                  accountKeys.find(a => a !== myAddress && a !== programIdStr) || '';
-                items.push({
-                  id: signature,
-                  type: 'init_relation',
-                  otherAddress: otherAddr,
-                  timestamp,
-                  status,
-                });
-              } else if (discMatch(confirmDisc)) {
-                const otherAddr =
-                  accountKeys.find(a => a !== myAddress && a !== programIdStr) || '';
-                items.push({
-                  id: signature,
-                  type: 'confirm_relation',
-                  otherAddress: otherAddr,
-                  timestamp,
-                  status,
-                });
-              } else if (discMatch(revokeDisc)) {
-                const otherAddr =
-                  accountKeys.find(a => a !== myAddress && a !== programIdStr) || '';
-                items.push({
-                  id: signature,
-                  type: 'revoke_relation',
-                  otherAddress: otherAddr,
-                  timestamp,
-                  status,
-                });
-              } else if (discMatch(transferDisc)) {
-                // Parse amount from instruction data (u64 LE after 8-byte discriminator)
-                let amount = 0;
-                if (data.length >= 16) {
-                  const amountBytes = data.slice(8, 16);
-                  let val = BigInt(0);
-                  for (let i = 7; i >= 0; i--) {
-                    val = (val << BigInt(8)) | BigInt(amountBytes[i]);
-                  }
-                  amount = Number(val) / LAMPORTS_PER_SOL;
-                }
-
-                // Determine sender/receiver from account keys
-                // guarded_transfer accounts: [pda, sender(writable), receiver(writable), system_program]
-                const senderIdx = 1;
-                const receiverIdx = 2;
-                const sender = accountKeys[senderIdx] || '';
-                const receiver = accountKeys[receiverIdx] || '';
-                const isSender = sender === myAddress;
-                const otherAddr = isSender ? receiver : sender;
-
-                items.push({
-                  id: signature,
-                  type: isSender ? 'sent' : 'received',
-                  amount,
-                  otherAddress: otherAddr,
-                  timestamp,
-                  status,
-                });
-              }
-            }
-          } else {
-            // Regular SOL transfer (not through our program)
-            // Check pre/post balances to determine direction
-            const meta = tx.meta;
-            if (!meta) continue;
-
-            const myIdx = accountKeys.indexOf(myAddress);
-            if (myIdx === -1) continue;
-
-            const preBalance = meta.preBalances[myIdx] || 0;
-            const postBalance = meta.postBalances[myIdx] || 0;
-            const diff = postBalance - preBalance;
-            const fee = meta.fee || 0;
-
-            // Skip if it's just a fee payment (no real transfer)
-            if (Math.abs(diff) <= fee) continue;
-
-            const netChange = diff + fee; // add back fee to get actual transfer amount
-            const amount = Math.abs(netChange) / LAMPORTS_PER_SOL;
-
-            // Find the other party (first account that's not us and not the program)
-            const otherAddr = accountKeys.find(a => a !== myAddress) || '';
-
-            items.push({
-              id: signature,
-              type: netChange > 0 ? 'received' : 'sent',
-              amount,
-              otherAddress: otherAddr,
-              timestamp,
-              status,
-            });
-          }
+          items.push({
+            id: signature,
+            type: netChange > 0 ? 'received' : 'sent',
+            amount,
+            otherAddress: otherAddr,
+            timestamp,
+            status,
+          });
         } catch (e) {
-          // Skip transactions that fail to parse
           console.warn('Failed to parse transaction:', signature, e);
         }
       }
@@ -224,43 +123,15 @@ export default function TransactionHistoryScreen() {
   };
 
   const getTypeLabel = (item: TransactionItem) => {
-    switch (item.type) {
-      case 'sent':
-        return '受保护转账';
-      case 'received':
-        return '受保护收款';
-      case 'init_relation':
-        return '发起可信关系';
-      case 'confirm_relation':
-        return '确认可信关系';
-      case 'revoke_relation':
-        return '撤销可信关系';
-      default:
-        return '交易';
-    }
+    return item.type === 'sent' ? '转账' : '收款';
   };
 
   const getTypeIcon = (item: TransactionItem) => {
-    switch (item.type) {
-      case 'sent':
-        return '↑';
-      case 'received':
-        return '↓';
-      case 'init_relation':
-        return '🤝';
-      case 'confirm_relation':
-        return '✓';
-      case 'revoke_relation':
-        return '✕';
-      default:
-        return '•';
-    }
+    return item.type === 'sent' ? '↑' : '↓';
   };
 
   const getIconBg = (item: TransactionItem) => {
-    if (item.type === 'sent') return '#ef4444';
-    if (item.type === 'received') return '#4ade80';
-    return '#6366f1';
+    return item.type === 'sent' ? '#ef4444' : '#4ade80';
   };
 
   const renderTransaction = ({item}: {item: TransactionItem}) => (
@@ -278,15 +149,13 @@ export default function TransactionHistoryScreen() {
         <Text style={styles.transactionTime}>{formatTime(item.timestamp)}</Text>
       </View>
       <View style={styles.transactionAmount}>
-        {item.amount !== undefined ? (
-          <Text
-            style={[
-              styles.amount,
-              item.type === 'sent' ? styles.sentAmount : styles.receivedAmount,
-            ]}>
-            {item.type === 'sent' ? '-' : '+'}{item.amount.toFixed(4)} SOL
-          </Text>
-        ) : null}
+        <Text
+          style={[
+            styles.amount,
+            item.type === 'sent' ? styles.sentAmount : styles.receivedAmount,
+          ]}>
+          {item.type === 'sent' ? '-' : '+'}{item.amount.toFixed(4)} SOL
+        </Text>
         <Text
           style={[
             styles.status,
@@ -323,7 +192,7 @@ export default function TransactionHistoryScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyText}>暂无交易记录</Text>
             <Text style={styles.emptyHint}>
-              发起受保护转账后，记录将显示在这里
+              转账后，记录将显示在这里
             </Text>
           </View>
         }

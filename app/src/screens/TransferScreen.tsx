@@ -10,32 +10,77 @@ import {
   ScrollView,
   Modal,
   FlatList,
+  Image,
 } from 'react-native';
 import {NativeStackNavigationProp, NativeStackScreenProps} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import {useWallet} from '../hooks/useWallet';
-import {useContract} from '../hooks/useContract';
-import {PublicKey, LAMPORTS_PER_SOL} from '@solana/web3.js';
+import {useContacts} from '../hooks/useContacts';
+import {PublicKey, LAMPORTS_PER_SOL, SystemProgram, Transaction} from '@solana/web3.js';
 import {TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddressSync, getAccount, createAssociatedTokenAccountIdempotentInstruction} from '@solana/spl-token';
 
 interface TokenBalance {
   mint: string;
   symbol: string;
+  name: string;
   amount: number;
   decimals: number;
+  logoURI?: string;
 }
 
-const KNOWN_TOKENS: {[key: string]: {symbol: string; decimals: number}} = {
-  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': {symbol: 'USDC', decimals: 6},
-  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': {symbol: 'USDT', decimals: 6},
-  'So11111111111111111111111111111111111111112': {symbol: 'WSOL', decimals: 9},
+const TOKEN_META: {[mint: string]: {symbol: string; name: string; decimals: number; logoURI: string}} = {
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': {symbol: 'USDC', name: 'USD Coin', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png'},
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': {symbol: 'USDT', name: 'Tether USD', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.svg'},
+  'So11111111111111111111111111111111111111112': {symbol: 'WSOL', name: 'Wrapped SOL', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'},
+  'mSoLzY6H4nc4n618KgvFMV7gEL437KbMKg6U3BjB3nK': {symbol: 'mSOL', name: 'Marinade Staked SOL', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzY6H4nc4n618KgvFMV7gEL437KbMKg6U3BjB3nK/logo.png'},
+  '7dHbWXmci3dT8UFKYYZSSLaV8FzudSVL7kgB2xNgRPeA': {symbol: 'stSOL', name: 'Lido Staked SOL', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7dHbWXmci3dT8UFKYYZSSLaV8FzudSVL7kgB2xNgRPeA/logo.png'},
+  'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263': {symbol: 'BONK', name: 'Bonk', decimals: 5, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/logo.png'},
+  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN': {symbol: 'JUP', name: 'Jupiter', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN/logo.png'},
+  '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R': {symbol: 'RAY', name: 'Raydium', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png'},
+  'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm': {symbol: 'WIF', name: 'dogwifhat', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm/logo.png'},
+  'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3': {symbol: 'PYTH', name: 'Pyth Network', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3/logo.svg'},
 };
+
+async function resolveTokenMeta(mint: string, connection: any): Promise<{symbol: string; name: string; decimals: number; logoURI: string | null}> {
+  if (TOKEN_META[mint]) {
+    return {...TOKEN_META[mint]};
+  }
+  try {
+    const resp = await fetch(`https://tokens.jup.ag/token/${mint}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data?.symbol && data?.decimals !== undefined) {
+        return {symbol: data.symbol, name: data.name || data.symbol, decimals: data.decimals, logoURI: data.logoURI || null};
+      }
+    }
+  } catch (e) {}
+  try {
+    const [metadataPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from('metadata'), new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s').toBuffer(), new PublicKey(mint).toBuffer()],
+      new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s'),
+    );
+    const info = await connection.getAccountInfo(metadataPda);
+    if (info?.data && info.data.length > 100) {
+      const buf = info.data;
+      let off = 1 + 32 + 32;
+      const readStr = (o: number) => {
+        const len = buf.readUInt32LE(o);
+        return {str: buf.slice(o + 4, o + 4 + len).toString('utf8').replace(/\0+$/, '').trim(), next: o + 4 + len};
+      };
+      const nameRes = readStr(off); off = nameRes.next;
+      const symRes = readStr(off); off = symRes.next;
+      const uriRes = readStr(off);
+      return {symbol: symRes.str || mint.slice(0, 4), name: nameRes.str || mint.slice(0, 8), decimals: 9, logoURI: null};
+    }
+  } catch (e) {}
+  return {symbol: mint.slice(0, 4) + '...', name: mint.slice(0, 8) + '...', decimals: 9, logoURI: null};
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Transfer'>;
 
 export default function TransferScreen({navigation, route}: Props) {
   const {publicKey, connection, signAndSendTransaction} = useWallet();
-  const {guardedTransfer, hasActiveRelationship, refreshRelationships, relationships} = useContract();
+  const {contacts} = useContacts();
   const [recipient, setRecipient] = useState(route.params?.contactAddress || '');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,9 +89,10 @@ export default function TransferScreen({navigation, route}: Props) {
   const [selectedCurrency, setSelectedCurrency] = useState<string>('SOL');
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showContactPicker, setShowContactPicker] = useState(false);
+  const [transferResult, setTransferResult] = useState<{success: boolean; message: string; signature?: string} | null>(null);
 
-  // Get active contacts for the picker
-  const activeContacts = relationships.filter(r => r.status === 'active');
+  // All contacts are trusted (confirmed via QR)
+  const trustedContacts = contacts;
 
   React.useEffect(() => {
     loadAllBalances();
@@ -80,21 +126,50 @@ export default function TransferScreen({navigation, route}: Props) {
         }
       }
 
-      // Cross-reference with KNOWN_TOKENS
+      // Build token list: show instantly with placeholders, then resolve metadata in parallel
       const tokens: TokenBalance[] = [];
-      for (const [mintAddress, tokenInfo] of Object.entries(KNOWN_TOKENS)) {
-        const entry = tokenMap[mintAddress];
-        if (entry && entry.amount > 0) {
-          tokens.push({
-            mint: mintAddress,
-            symbol: tokenInfo.symbol,
-            amount: entry.amount,
-            decimals: tokenInfo.decimals,
-          });
+      // Add SOL as first token (known metadata)
+      tokens.push({
+        mint: 'native',
+        symbol: 'SOL',
+        name: 'Solana',
+        amount: solBal / LAMPORTS_PER_SOL,
+        decimals: 9,
+        logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+      });
+
+      // Add SPL tokens with instant placeholder, resolve metadata in parallel
+      const unknownMints: {mint: string; amount: number; index: number}[] = [];
+      for (const [mint, entry] of Object.entries(tokenMap)) {
+        if (entry.amount > 0) {
+          const known = TOKEN_META[mint];
+          if (known) {
+            tokens.push({mint, symbol: known.symbol, name: known.name, amount: entry.amount, decimals: known.decimals, logoURI: known.logoURI});
+          } else {
+            unknownMints.push({mint, amount: entry.amount, index: tokens.length});
+            tokens.push({mint, symbol: mint.slice(0, 4) + '...', name: '加载中...', amount: entry.amount, decimals: 9});
+          }
         }
       }
 
-      setTokenBalances(tokens);
+      setTokenBalances([...tokens]); // Show immediately
+
+      // Phase 2: Resolve unknown metadata in parallel
+      if (unknownMints.length > 0) {
+        const results = await Promise.all(unknownMints.map(u => resolveTokenMeta(u.mint, connection)));
+        for (let i = 0; i < unknownMints.length; i++) {
+          const meta = results[i];
+          tokens[unknownMints[i].index] = {
+            mint: unknownMints[i].mint,
+            symbol: meta.symbol,
+            name: meta.name,
+            amount: unknownMints[i].amount,
+            decimals: meta.decimals,
+            logoURI: meta.logoURI || undefined,
+          };
+        }
+        setTokenBalances([...tokens]); // Update with full metadata
+      }
     } catch (error) {
       console.error('Failed to load balances:', error);
     }
@@ -131,14 +206,6 @@ export default function TransferScreen({navigation, route}: Props) {
       return false;
     }
     
-    // Check if there's an active trust relationship with the recipient
-    if (!hasActiveRelationship(recipient)) {
-      Alert.alert(
-        '无法转账',
-        '你与收款方之间没有激活的可信关系。请先建立并确认可信关系后再转账。',
-      );
-      return false;
-    }
     return true;
   };
 
@@ -154,11 +221,18 @@ export default function TransferScreen({navigation, route}: Props) {
       let signature: string;
       
       if (selectedCurrency === 'SOL') {
-        // SOL transfer using guarded transfer
-        signature = await guardedTransfer(
-          recipient,
-          parseFloat(amount),
+        // Regular SOL transfer using SystemProgram
+        const {blockhash} = await connection.getLatestBlockhash();
+        const transaction = new Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: new PublicKey(recipient),
+            lamports: Math.floor(parseFloat(amount) * LAMPORTS_PER_SOL),
+          })
         );
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = publicKey;
+        signature = await signAndSendTransaction(transaction);
       } else {
         // SPL Token transfer
         const tokenInfo = tokenBalances.find(t => t.symbol === selectedCurrency);
@@ -227,21 +301,26 @@ export default function TransferScreen({navigation, route}: Props) {
         );
 
         // Build and send transaction
-        const {Transaction} = require('@solana/web3.js');
+        const {blockhash: splBlockhash} = await connection.getLatestBlockhash();
         const transaction = new Transaction();
         instructions.forEach((instr: any) => transaction.add(instr));
+        transaction.recentBlockhash = splBlockhash;
+        transaction.feePayer = publicKey;
 
         signature = await signAndSendTransaction(transaction);
       }
 
-      Alert.alert(
-        '转账成功',
-        `交易签名: ${signature.slice(0, 20)}...`,
-        [{text: '确定', onPress: () => navigation.goBack()}],
-      );
+      setTransferResult({
+        success: true,
+        message: `转账 ${amount} ${selectedCurrency} 成功`,
+        signature: signature,
+      });
     } catch (error: any) {
       console.error('Transfer failed:', error);
-      Alert.alert('转账失败', error.message || '请重试');
+      setTransferResult({
+        success: false,
+        message: error.message || '转账失败，请重试',
+      });
     } finally {
       setLoading(false);
     }
@@ -256,8 +335,7 @@ export default function TransferScreen({navigation, route}: Props) {
           activeOpacity={0.8}>
           <Text style={styles.balanceLabel}>可用余额</Text>
           <Text style={styles.balanceAmount}>
-            {selectedCurrency === 'SOL' ? solBalance.toFixed(4) : 
-             (tokenBalances.find(t => t.symbol === selectedCurrency)?.amount.toFixed(4) || '0.0000')}
+            {tokenBalances.find(t => t.symbol === selectedCurrency)?.amount.toFixed(4) || '0.0000'}
           </Text>
           <Text style={styles.currencySelector}>{selectedCurrency} ▼</Text>
         </TouchableOpacity>
@@ -302,7 +380,7 @@ export default function TransferScreen({navigation, route}: Props) {
         <View style={styles.warning}>
           <Text style={styles.warningIcon}>🛡️</Text>
           <Text style={styles.warningText}>
-            此转账受可信关系保护。只有与你有激活可信关系的联系人才能接收。
+            建议仅向可信联系人转账，避免被骗。
           </Text>
         </View>
       </ScrollView>
@@ -316,22 +394,7 @@ export default function TransferScreen({navigation, route}: Props) {
         <View style={styles.currencyModalOverlay}>
           <View style={styles.currencyModalContent}>
             <Text style={styles.currencyModalTitle}>选择币种</Text>
-            
-            {/* SOL Option */}
-            <TouchableOpacity
-              style={[
-                styles.currencyOption,
-                selectedCurrency === 'SOL' && styles.currencyOptionSelected,
-              ]}
-              onPress={() => {
-                setSelectedCurrency('SOL');
-                setShowCurrencyModal(false);
-              }}>
-              <Text style={styles.currencySymbol}>SOL</Text>
-              <Text style={styles.currencyBalance}>{solBalance.toFixed(4)}</Text>
-            </TouchableOpacity>
 
-            {/* SPL Token Options */}
             {tokenBalances.map((token) => (
               <TouchableOpacity
                 key={token.mint}
@@ -343,13 +406,25 @@ export default function TransferScreen({navigation, route}: Props) {
                   setSelectedCurrency(token.symbol);
                   setShowCurrencyModal(false);
                 }}>
-                <Text style={styles.currencySymbol}>{token.symbol}</Text>
+                <View style={styles.currencyLeft}>
+                  <View style={styles.currencyIconWrap}>
+                    {token.logoURI ? (
+                      <Image source={{uri: token.logoURI}} style={styles.currencyLogo} />
+                    ) : (
+                      <Text style={styles.tokenIconText}>{token.symbol.charAt(0)}</Text>
+                    )}
+                  </View>
+                  <View>
+                    <Text style={styles.currencyName}>{token.name}</Text>
+                    <Text style={styles.currencySymbolSmall}>{token.symbol}</Text>
+                  </View>
+                </View>
                 <Text style={styles.currencyBalance}>{token.amount.toFixed(4)}</Text>
               </TouchableOpacity>
             ))}
 
             {tokenBalances.length === 0 && (
-              <Text style={styles.noTokensText}>暂无其他代币</Text>
+              <Text style={styles.noTokensText}>暂无代币</Text>
             )}
 
             <TouchableOpacity
@@ -371,29 +446,31 @@ export default function TransferScreen({navigation, route}: Props) {
           <View style={styles.currencyModalContent}>
             <Text style={styles.currencyModalTitle}>选择联系人</Text>
 
-            {activeContacts.length === 0 ? (
-              <Text style={styles.noTokensText}>暂无已激活的可信联系人</Text>
+            {trustedContacts.length === 0 ? (
+              <Text style={styles.noTokensText}>暂无可信联系人</Text>
             ) : (
               <FlatList
-                data={activeContacts}
-                keyExtractor={item => item.pda.toString()}
+                data={trustedContacts}
+                keyExtractor={item => item.address}
                 renderItem={({item}) => (
                   <TouchableOpacity
                     style={styles.contactPickerItem}
                     onPress={() => {
-                      setRecipient(item.otherUser.toString());
+                      setRecipient(item.address);
                       setShowContactPicker(false);
                     }}>
                     <View style={styles.contactPickerAvatar}>
                       <Text style={styles.contactPickerAvatarText}>
-                        {item.otherUser.toString().slice(0, 1).toUpperCase()}
+                        {item.address.slice(0, 1).toUpperCase()}
                       </Text>
                     </View>
                     <View style={styles.contactPickerInfo}>
                       <Text style={styles.contactPickerName}>
-                        {item.otherUser.toString().slice(0, 6)}...{item.otherUser.toString().slice(-4)}
+                        {item.remark || `${item.address.slice(0, 6)}...${item.address.slice(-4)}`}
                       </Text>
-                      <Text style={styles.contactPickerHint}>可信联系人</Text>
+                      <Text style={styles.contactPickerHint}>
+                        {item.remark ? `${item.address.slice(0, 6)}...${item.address.slice(-4)}` : '可信联系人'}
+                      </Text>
                     </View>
                     <Text style={styles.contactPickerArrow}>›</Text>
                   </TouchableOpacity>
@@ -405,6 +482,49 @@ export default function TransferScreen({navigation, route}: Props) {
               style={styles.modalCloseButton}
               onPress={() => setShowContactPicker(false)}>
               <Text style={styles.modalCloseButtonText}>关闭</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Transfer Result Overlay */}
+      <Modal
+        visible={transferResult !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          if (transferResult?.success) {
+            navigation.goBack();
+          } else {
+            setTransferResult(null);
+          }
+        }}>
+        <View style={styles.resultOverlay}>
+          <View style={styles.resultCard}>
+            <Text style={[styles.resultIcon, transferResult?.success ? styles.resultIconSuccess : styles.resultIconFail]}>
+              {transferResult?.success ? '✓' : '✕'}
+            </Text>
+            <Text style={styles.resultTitle}>
+              {transferResult?.success ? '转账成功' : '转账失败'}
+            </Text>
+            <Text style={styles.resultMessage}>{transferResult?.message}</Text>
+            {transferResult?.signature && (
+              <Text style={styles.resultSignature}>
+                签名: {transferResult.signature.slice(0, 16)}...
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[styles.resultButton, transferResult?.success ? styles.resultButtonSuccess : styles.resultButtonFail]}
+              onPress={() => {
+                if (transferResult?.success) {
+                  navigation.goBack();
+                } else {
+                  setTransferResult(null);
+                }
+              }}>
+              <Text style={styles.resultButtonText}>
+                {transferResult?.success ? '完成' : '重试'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -599,6 +719,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     padding: 24,
   },
+  tokenIconText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  currencyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  currencyIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#3a3a5e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  currencyLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  currencyName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  currencySymbolSmall: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
   modalCloseButton: {
     marginTop: 16,
     paddingHorizontal: 32,
@@ -611,5 +764,67 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  resultOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  resultCard: {
+    backgroundColor: '#2a2a4e',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 360,
+  },
+  resultIcon: {
+    fontSize: 64,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  resultIconSuccess: {
+    color: '#4ade80',
+  },
+  resultIconFail: {
+    color: '#ef4444',
+  },
+  resultTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  resultMessage: {
+    fontSize: 15,
+    color: '#ccc',
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  resultSignature: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'monospace',
+    marginBottom: 24,
+  },
+  resultButton: {
+    marginTop: 16,
+    paddingHorizontal: 48,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  resultButtonSuccess: {
+    backgroundColor: '#4ade80',
+  },
+  resultButtonFail: {
+    backgroundColor: '#ef4444',
+  },
+  resultButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

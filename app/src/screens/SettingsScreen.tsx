@@ -13,7 +13,6 @@ import {
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import {useWallet} from '../hooks/useWallet';
-import {TRUSTPORT_PROGRAM_ID} from '../contract/trustport';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Settings'>;
@@ -32,11 +31,6 @@ export default function SettingsScreen({navigation}: Props) {
     Clipboard.setString(publicKey.toString());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const copyProgramId = () => {
-    Clipboard.setString(TRUSTPORT_PROGRAM_ID.toString());
-    Alert.alert('已复制', '程序 ID 已复制到剪贴板');
   };
 
   const handleDisconnect = () => {
@@ -74,22 +68,9 @@ export default function SettingsScreen({navigation}: Props) {
           <View style={styles.settingItem}>
             <Text style={styles.settingLabel}>网络</Text>
             <View style={styles.networkBadge}>
-              <Text style={styles.networkText}>Devnet</Text>
+              <Text style={styles.networkText}>Mainnet</Text>
             </View>
           </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>合约信息</Text>
-          <TouchableOpacity style={styles.settingItem} onPress={copyProgramId}>
-            <View style={styles.programIdContainer}>
-              <Text style={styles.settingLabel}>程序 ID</Text>
-              <Text style={styles.programIdValue}>
-                {shortenAddress(TRUSTPORT_PROGRAM_ID.toString())}
-              </Text>
-            </View>
-            <Text style={styles.settingArrow}>⧉</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -183,15 +164,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6366f1',
     fontWeight: '600',
-  },
-  programIdContainer: {
-    flex: 1,
-  },
-  programIdValue: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 4,
-    fontFamily: 'monospace',
   },
   disconnectButton: {
     backgroundColor: 'rgba(239, 68, 68, 0.15)',

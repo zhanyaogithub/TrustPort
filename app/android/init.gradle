@@ -1,0 +1,22 @@
+allprojects {
+    buildscript {
+        repositories {
+            google()
+            mavenCentral()
+        }
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+settingsEvaluated { settings ->
+    settings.pluginManagement {
+        repositories {
+            google()
+            mavenCentral()
+            gradlePluginPortal()
+        }
+    }
+}

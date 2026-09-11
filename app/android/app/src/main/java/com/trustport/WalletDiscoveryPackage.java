@@ -16,6 +16,7 @@ public class WalletDiscoveryPackage implements ReactPackage {
         List<NativeModule> modules = new ArrayList<>();
         modules.add(new WalletDiscoveryModule(reactContext));
         modules.add(new QRScannerModule(reactContext));
+        modules.add(new QRSaveModule(reactContext));
         return modules;
     }
 

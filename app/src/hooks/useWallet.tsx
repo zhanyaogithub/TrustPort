@@ -277,40 +277,18 @@ export function WalletProvider({children}: WalletProviderProps) {
         return signature;
       }
 
-      // MWA wallet: use wallet adapter with reauthorize
+      // MWA wallet: use two separate transact() calls.
+      // Seed Vault times out when authorize() + signAndSendTransactions() are
+      // in the same transact() session. Split into:
+      //   Step 1: authorize/reauthorize to get a valid auth_token
+      //   Step 2: reauthorize + signAndSendTransactions in a fresh session
       try {
-        const signatures = await transact(async (walletApi) => {
-          // Each transact() creates a new session - must reauthorize first
-          if (authTokenRef.current) {
-            try {
-              console.log('[signAndSend] Reauthorizing with saved auth_token...');
-              const reauthResult = await walletApi.reauthorize({
-                auth_token: authTokenRef.current,
-              });
-              // Update auth_token if a new one was issued
-              if (reauthResult.auth_token) {
-                authTokenRef.current = reauthResult.auth_token;
-                await saveSession(publicKey, false, reauthResult.auth_token);
-              }
-              console.log('[signAndSend] Reauthorize succeeded');
-            } catch (reauthError: any) {
-              console.warn('[signAndSend] Reauthorize failed, trying full authorize:', reauthError.message);
-              // Fall back to full authorize
-              const authResult = await walletApi.authorize({
-                cluster: 'mainnet-beta',
-                identity: {
-                  name: 'TrustPort',
-                  uri: 'https://github.com/zhanyaogithub/TrustPort',
-                },
-              });
-              if (authResult.auth_token) {
-                authTokenRef.current = authResult.auth_token;
-                await saveSession(publicKey, false, authResult.auth_token);
-              }
-            }
-          } else {
-            // No saved token, do full authorize
-            console.log('[signAndSend] No auth_token, doing full authorize...');
+        // ── Step 1: Ensure we have a fresh auth_token ──
+        let needsFullAuthorize = !authTokenRef.current;
+
+        if (needsFullAuthorize) {
+          console.log('[signAndSend] Step 1: No auth_token, opening authorize session...');
+          await transact(async (walletApi) => {
             const authResult = await walletApi.authorize({
               cluster: 'mainnet-beta',
               identity: {
@@ -321,17 +299,53 @@ export function WalletProvider({children}: WalletProviderProps) {
             if (authResult.auth_token) {
               authTokenRef.current = authResult.auth_token;
               await saveSession(publicKey, false, authResult.auth_token);
+              console.log('[signAndSend] Step 1: auth_token obtained');
+            } else {
+              throw new Error('authorize() returned no auth_token');
             }
-          }
-
-          const result = await walletApi.signAndSendTransactions({
-            transactions: [transaction],
           });
-          return result;
+        } else {
+          console.log('[signAndSend] Step 1: auth_token already available, skipping');
+        }
+
+        // ── Step 2: Reauthorize + sign in a fresh transact() session ──
+        console.log('[signAndSend] Step 2: Opening signing session...');
+        const signatures = await transact(async (walletApi) => {
+          // Must reauthorize in every new transact() session
+          console.log('[signAndSend] Step 2: reauthorizing...');
+          const reauthResult = await walletApi.reauthorize({
+            auth_token: authTokenRef.current!,
+          });
+          if (reauthResult.auth_token) {
+            authTokenRef.current = reauthResult.auth_token;
+            await saveSession(publicKey, false, reauthResult.auth_token);
+          }
+          console.log('[signAndSend] Step 2: reauthorize succeeded, sending transaction...');
+
+          // Try signAndSendTransactions first
+          try {
+            const result = await walletApi.signAndSendTransactions({
+              transactions: [transaction],
+            });
+            return result;
+          } catch (sendError: any) {
+            // Fallback: sign only, then send manually via RPC
+            console.warn('[signAndSend] signAndSendTransactions failed, trying signTransactions + manual send:', sendError.message);
+            const signedTxs = await walletApi.signTransactions({
+              transactions: [transaction],
+            });
+            console.log('[signAndSend] signTransactions succeeded, sending via RPC...');
+            const rawTx = signedTxs[0].serialize();
+            const sig = await connection.sendRawTransaction(rawTx, {
+              preflightCommitment: 'confirmed',
+            });
+            await connection.confirmTransaction(sig, 'confirmed');
+            return [sig];
+          }
         });
         return Array.isArray(signatures) ? signatures[0] : signatures;
-      } catch (error) {
-        console.error('Transaction failed:', error);
+      } catch (error: any) {
+        console.error('[signAndSend] Transaction failed:', error.message);
         throw error;
       }
     },

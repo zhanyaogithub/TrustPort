@@ -1,0 +1,55 @@
+#!/bin/sh
+
+# Copyright (c) 2015-present, Facebook, Inc.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
+# This file is a copy of the Gradle wrapper script from the React Native template
+# with minor modifications to work with our project.
+
+set -e
+
+if [ -n "$NODE_BIN_PATH" ]; then
+  NODE_BIN_PATH=$(cd "$NODE_BIN_PATH" > /dev/null && pwd)
+  NODE_BINARY="$NODE_BIN_PATH/node"
+else
+  NODE_BINARY=`which node`
+fi
+
+if [ ! -x "$NODE_BINARY" ]; then
+  echo "Could not find node. Make sure it is in your PATH or set NODE_BIN_PATH." >&2
+  exit 1
+fi
+
+PROJECT_ROOT=`pwd`
+BUNDLE_COMMAND="build"
+BUNDLE_ARGS="--platform android --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res/"
+
+# Extract the target architecture from the command line arguments
+ARCHS=""
+for arg in "$@"; do
+  if [[ $arg == *"--arch"* ]]; then
+    ARCHS="$arg"
+  fi
+done
+
+# If targeting only one architecture, run the packager directly
+if [ -n "$ARCHS" ]; then
+  echo "Building bundle for $ARCHS..."
+  "$NODE_BINARY" node_modules/react-native/cli.js bundle $BUNDLE_ARGS
+else
+  # Run the original gradle command
+  ORIGINAL_DIR=$(pwd)
+  cd $(dirname $0)
+  
+  # Use the local gradle wrapper if available
+  if [ -x "./gradlew" ]; then
+    ./gradlew "$@"
+  else
+    # Fallback to system gradle
+    gradle "$@"
+  fi
+  
+  cd $ORIGINAL_DIR
+fi
