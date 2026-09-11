@@ -1,153 +1,123 @@
-# TrustPort Build Status & Next Steps
+# TrustPort 开发进度报告
 
-## Current State (2026-09-09)
+> 最后更新：2026-09-11
 
-### ✅ Completed
-1. **Smart Contract**: Anchor 0.32.1 contract with bidirectional trust relationship logic
-   - `init_relationship`, `confirm_relationship`, `revoke_relationship`, `guarded_transfer` instructions
-   - Program ID: `5qYmGbKTXkd9KRAbJYtPwGsqsYwHRjCseRzNPSGySztp`
-   - TypeScript tests passing on local validator
+## 项目概览
 
-2. **Frontend Integration**: React Native app fully integrated with on-chain contract
-   - Wallet connection via Mobile Wallet Adapter v2.3.0
-   - All screens implemented: Onboarding, Home, Contacts, NewRelation, ConfirmRelation, Transfer, TransactionHistory, Settings
-   - Real-time relationship status from chain
-   - Transaction history parsing with discriminator-based instruction detection
-   - TypeScript compilation: **PASSING** (no errors)
+TrustPort 是一款基于 Solana Mobile 的可信联系人转账钱包应用，为 Solana Mobile Hackathon 2026 "CLOCK IN" 参赛项目。
 
-3. **Dependencies**: All npm packages installed successfully
-   - @solana/web3.js, @coral-xyz/anchor, @solana-mobile/mobile-wallet-adapter-protocol-web3js
-   - @noble/hashes/sha256 for React Native compatible hashing
+- **Program ID**: `5qYmGbKTXkd9KRAbJYtPwGsqsYwHRjCseRzNPSGySztp`
+- **目标设备**: Solana Seeker (Samsung)
+- **技术栈**: React Native 0.73.4 + Anchor 0.32.1 + TypeScript
 
-### ⚠️ Build Environment Gaps
+## 开发进度总览
 
-**Missing Android/iOS Toolchains:**
-- ❌ Android SDK (not installed)
-- ❌ JDK 17+ (current: 1.8.0_144, needs upgrade)
-- ❌ Android Studio / Gradle
-- ❌ Xcode Command Line Tools (partial)
-- ❌ CocoaPods
-- ❌ ADB (Android Debug Bridge)
+| 模块 | 状态 | 完成度 |
+|------|------|--------|
+| 智能合约 (Anchor) | ✅ 完成 | 100% |
+| React Native 前端 | ✅ 完成 | 100% |
+| 钱包连接 (MWA/Seed Vault/本地) | ✅ 完成 | 100% |
+| QR 码联系人系统 | ✅ 完成 | 100% |
+| 多币种资产管理 | ✅ 完成 | 100% |
+| 原生 Android 模块 | ✅ 完成 | 100% |
+| APK 构建与设备部署 | ✅ 完成 | 100% |
+| 交易记录优化 | ✅ 完成 | 100% |
+| dApp Store 素材准备 | ✅ 完成 | 图标+描述已就绪 |
+| Demo 视频 | ❌ 待完成 | — |
+| Pitch Deck | ❌ 待完成 | — |
+| dApp Store 发布 | ❌ 待完成 | — |
+| GitHub Push | ⏸️ 待网络恢复 | — |
 
-**Impact**: Cannot generate APK or run on physical device without Android development environment.
+## 已完成功能清单
 
-### 📋 Remaining Hackathon Tasks
+### 智能合约
+- [x] Anchor 合约开发（init/confirm/revoke relationship, guarded_transfer）
+- [x] 合约测试用例（12 个测试全部通过）
+- [x] Devnet 部署
+- [x] IDL 生成与前端接口
 
-#### Critical Path (Must Complete Before Oct 8):
+### 钱包与连接
+- [x] Mobile Wallet Adapter v2.3.0 集成
+- [x] Phantom 钱包连接修复（Samsung 兼容）
+- [x] Seed Vault 签名适配
+- [x] 本地钱包模式（Demo Mode，无需外部钱包）
+- [x] 钱包会话持久化（AsyncStorage）
+- [x] 自定义钱包选择器 UI
 
-1. **Set Up Android Build Environment** (Priority: HIGH)
-   ```bash
-   # Install Android Studio (includes SDK, emulator, build tools)
-   brew install --cask android-studio
-   
-   # Or manual installation:
-   # 1. Download from https://developer.android.com/studio
-   # 2. Install Android SDK Platform 34 (API 34)
-   # 3. Install Android SDK Build-Tools 34.0.0
-   # 4. Set ANDROID_HOME environment variable
-   
-   # Upgrade JDK to 17+
-   brew install openjdk@17
-   
-   # Verify setup
-   export ANDROID_HOME=$HOME/Library/Android/sdk
-   export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
-   adb devices  # Should show connected device or emulator
-   ```
+### 可信联系人系统
+- [x] QR 码生成与分享（含相册保存原生模块）
+- [x] QR 码扫码确认（ZXing 原生扫码模块）
+- [x] 口令验证机制
+- [x] 联系人列表管理（AsyncStorage 本地存储）
+- [x] 关系系统重构：合约 → QR 码 + 本地存储
 
-2. **Deploy Contract to Devnet** (Blocked by RPC issues)
-   ```bash
-   cd /Users/zhanyao/Documents/Qoder/solana/TrustPort/contract/trustport
-   anchor deploy --provider.cluster devnet
-   ```
-   *Note: Devnet RPC endpoints experiencing 429 rate limits. May need:*
-   - Alternative RPC provider (Helius, QuickNode paid tier)
-   - Wait for network recovery
-   - Use local validator for demo recording
+### 资产管理
+- [x] SOL + SPL 代币余额展示（Token Program + Token-2022）
+- [x] 代币元数据三级解析（TOKEN_META → Jupiter API → Metaplex 链上）
+- [x] 已知代币列表（SOL、USDC、USDT、WSOL、mSOL、stSOL、BONK、JUP、RAY、WIF、PYTH、IQ50、GMT、GST）
+- [x] 资产筛选过滤（隐藏小额、零余额、按价值排序）
+- [x] 24h 涨跌幅显示（CoinGecko API）
+- [x] SOL 余额不足提醒
+- [x] 两阶段加载优化（即时展示占位 + Promise.all 并行解析）
 
-3. **Build APK** (After environment setup)
-   ```bash
-   cd /Users/zhanyao/Documents/Qoder/solana/TrustPort/app
-   npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
-   cd android && ./gradlew assembleRelease
-   ```
-   Output: `android/app/build/outputs/apk/release/app-release.apk`
+### 转账功能
+- [x] SOL 原生转账
+- [x] SPL 代币转账（含自动创建接收方 ATA）
+- [x] 扫码填地址（ZXing 原生模块）
+- [x] MAX 一键最大金额按钮
+- [x] 联系人选择器
+- [x] Solana Explorer 链接（solscan.io）
+- [x] 转账结果展示覆盖层
 
-4. **Test on Seeker Device**
-   - Install APK on Solana Saga/Seeker
-   - Verify wallet connection flow
-   - Test relationship creation/confirmation
-   - Test guarded transfer
-   - Record any bugs for fixes
+### 交易记录
+- [x] 链上交易记录解析
+- [x] 并行批量加载优化（Promise.all 分批 + 渐进式显示）
+- [x] 可点击跳转 solscan.io
 
-5. **Record 3-Minute Demo Video**
-   - Show app installation on Seeker
-   - Demonstrate wallet connection
-   - Create trust relationship (both sides)
-   - Execute protected transfer
-   - View transaction history
-   - Highlight mobile UX advantages
+### UI/UX
+- [x] 头像 + 应用名 + 地址缩略头部布局
+- [x] 地址双击展示 QR 码 + 复制功能
+- [x] 6 宫格快捷操作按钮
+- [x] 8 个完整页面实现
 
-6. **Create Pitch Deck** (5-7 slides)
-   - Problem: One-way transfers lack trust verification
-   - Solution: Bidirectional confirmation prevents scams
-   - Tech: Anchor smart contracts + MWA
-   - Demo screenshots/video
-   - Market opportunity (Solana mobile users)
-   - Future roadmap
+### 原生 Android 模块
+- [x] QRScannerModule（ZXing 全屏扫码）
+- [x] QRSaveModule（QR 码生成 + 相册保存）
+- [x] WalletDiscoveryModule（MWA 钱包检测）
 
-7. **Submit to Hackathon** (Deadline: Oct 8)
-   - [ ] APK file
-   - [ ] Code repository (GitHub with commit history)
-   - [ ] 3-minute demo video (YouTube/Vimeo link)
-   - [ ] Pitch deck (PDF)
-   - [ ] dApp Store listing (optional but recommended for SKR prize)
+### 工程化
+- [x] .gitignore 完善
+- [x] 项目缓存清理（释放 ~1.1GB）
+- [x] README 更新
+- [x] dApp Store 提交文档
 
-### 🔧 Immediate Next Actions
+## 待完成任务
 
-**Today:**
-1. Install Android Studio and required SDK components
-2. Upgrade JDK to version 17+
-3. Configure environment variables (ANDROID_HOME, JAVA_HOME)
-4. Attempt first APK build (`cd android && ./gradlew assembleDebug`)
+### 必须（Hackathon 提交前）
+1. **Demo 视频（3 分钟）** — 录制手机完整操作流程
+2. **Pitch Deck（5-7 页）** — 项目介绍幻灯片
+3. **GitHub Push** — 推送本地提交到远程仓库
 
-**This Week:**
-1. Resolve Devnet deployment (try alternative RPC or wait)
-2. Build release APK
-3. Test on actual Seeker device (or emulator if unavailable)
-4. Fix any runtime issues
+### 推荐（争取 SKR 特别奖）
+4. **dApp Store 上架** — 在 Publisher Portal 注册并发布
 
-**Next Week:**
-1. Record demo video
-2. Create pitch deck
-3. Prepare GitHub repository with clean commit history
-4. Submit all materials before Oct 8 deadline
+## 技术决策记录
 
-### 📊 Progress Summary
+| 决策 | 原因 |
+|------|------|
+| 关系系统改用 QR 码 + 本地存储 | 合约模式 UX 流程复杂，QR 码更直观 |
+| 代币元数据三级降级 | 最大化代币覆盖率：硬编码 → Jupiter → Metaplex |
+| 两阶段加载 | 提升页面打开速度，先显示占位再刷新 |
+| 交易记录并行批量加载 | 从串行 50 次 → 3 个一批并行，首屏 1-2 秒可见 |
+| 多钱包适配 | 兼容 Phantom（MWA）、Seed Vault、无钱包场景 |
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Smart Contract | ✅ Complete | Tests passing, ready for Devnet deploy |
-| Frontend UI | ✅ Complete | All 8 screens implemented |
-| Contract Integration | ✅ Complete | Real chain data loading |
-| TypeScript | ✅ Passing | Zero compilation errors |
-| Dependencies | ✅ Installed | 1106 packages, no conflicts |
-| Android Build Env | ❌ Missing | Needs Android Studio + JDK 17+ |
-| Devnet Deployment | ⏸️ Blocked | RPC rate limiting |
-| APK Generation | ❌ Pending | Requires Android env |
-| Device Testing | ❌ Pending | Requires APK + Seeker |
-| Demo Video | ❌ Pending | Requires working app |
-| Pitch Deck | ❌ Pending | Content planning needed |
-| Submission | ❌ Pending | Deadline: Oct 8 |
+## 构建信息
 
-### 💡 Recommendations
-
-1. **Parallelize Environment Setup**: Start Android Studio download now (large file ~1GB), work on pitch deck content while downloading
-2. **Fallback Plan**: If Devnet remains unreachable, use local validator for demo + note in submission that Devnet deploy is pending network recovery
-3. **SKR Prize Strategy**: Focus on unique mobile UX (bidirectional trust confirmation is novel), emphasize security angle for judges
-4. **Time Buffer**: Aim to have everything ready by Oct 5-6 to allow 2 days for unexpected issues
+- **APK**: release 签名版本，约 24MB
+- **Bundle**: Metro bundler 生成 JS bundle 嵌入 APK
+- **签名密钥**: `app/android/app/trustport-release.keystore`
+- **Publisher Keypair**: `4owS9JD1GPKpxPvM4eoeqSWbKcNJfCaKfEyZEZa1k9DL`
 
 ---
 
-**Last Updated**: 2026-09-09  
-**Next Review**: After Android environment setup
+**截止日期**: 2026 年 10 月 8 日
