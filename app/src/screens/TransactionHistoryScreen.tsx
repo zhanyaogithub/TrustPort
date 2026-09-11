@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Linking,
+  TouchableOpacity,
 } from 'react-native';
 import {useWallet} from '../hooks/useWallet';
 import {LAMPORTS_PER_SOL} from '@solana/web3.js';
@@ -31,64 +32,59 @@ export default function TransactionHistoryScreen() {
     if (!publicKey) return;
     setLoading(true);
     try {
-      // Get recent transaction signatures for this address
       const signatures = await connection.getSignaturesForAddress(
         publicKey,
         {limit: 50},
         'confirmed',
       );
 
-      const items: TransactionItem[] = [];
+      const allItems: TransactionItem[] = [];
+      const BATCH_SIZE = 3;
 
-      for (const sigInfo of signatures) {
-        const signature = sigInfo.signature;
-        const timestamp = sigInfo.blockTime || 0;
-        const status = sigInfo.err ? 'failed' : 'confirmed';
+      for (let i = 0; i < signatures.length; i += BATCH_SIZE) {
+        const batch = signatures.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(
+          batch.map(async (sigInfo) => {
+            const signature = sigInfo.signature;
+            const timestamp = sigInfo.blockTime || 0;
+            const status = sigInfo.err ? 'failed' : 'confirmed';
+            try {
+              const tx = await connection.getTransaction(signature, {
+                maxSupportedTransactionVersion: 0,
+              });
+              if (!tx) return null;
 
-        try {
-          const tx = await connection.getTransaction(signature, {
-            maxSupportedTransactionVersion: 0,
-          });
+              const accountKeys = tx.transaction.message.staticAccountKeys.map(k => k.toString());
+              const myAddress = publicKey.toString();
+              const meta = tx.meta;
+              if (!meta) return null;
 
-          if (!tx) continue;
+              const myIdx = accountKeys.indexOf(myAddress);
+              if (myIdx === -1) return null;
 
-          const accountKeys = tx.transaction.message.staticAccountKeys.map(k =>
-            k.toString(),
-          );
-          const myAddress = publicKey.toString();
-          const meta = tx.meta;
-          if (!meta) continue;
+              const preBalance = meta.preBalances[myIdx] || 0;
+              const postBalance = meta.postBalances[myIdx] || 0;
+              const diff = postBalance - preBalance;
+              const fee = meta.fee || 0;
+              if (Math.abs(diff) <= fee) return null;
 
-          const myIdx = accountKeys.indexOf(myAddress);
-          if (myIdx === -1) continue;
+              const netChange = diff + fee;
+              const amount = Math.abs(netChange) / LAMPORTS_PER_SOL;
+              const otherAddr = accountKeys.find(a => a !== myAddress) || '';
 
-          const preBalance = meta.preBalances[myIdx] || 0;
-          const postBalance = meta.postBalances[myIdx] || 0;
-          const diff = postBalance - preBalance;
-          const fee = meta.fee || 0;
+              return {id: signature, type: (netChange > 0 ? 'received' : 'sent') as 'sent' | 'received', amount, otherAddress: otherAddr, timestamp, status};
+            } catch (e) {
+              return null;
+            }
+          })
+        );
 
-          if (Math.abs(diff) <= fee) continue;
-
-          const netChange = diff + fee;
-          const amount = Math.abs(netChange) / LAMPORTS_PER_SOL;
-          const otherAddr = accountKeys.find(a => a !== myAddress) || '';
-
-          items.push({
-            id: signature,
-            type: netChange > 0 ? 'received' : 'sent',
-            amount,
-            otherAddress: otherAddr,
-            timestamp,
-            status,
-          });
-        } catch (e) {
-          console.warn('Failed to parse transaction:', signature, e);
+        for (const item of results) {
+          if (item) allItems.push(item);
         }
+        allItems.sort((a, b) => b.timestamp - a.timestamp);
+        setTransactions([...allItems]); // Update UI after each batch
       }
-
-      // Sort by timestamp descending
-      items.sort((a, b) => b.timestamp - a.timestamp);
-      setTransactions(items);
     } catch (error) {
       console.error('Failed to load transactions:', error);
     } finally {
@@ -134,8 +130,15 @@ export default function TransactionHistoryScreen() {
     return item.type === 'sent' ? '#ef4444' : '#4ade80';
   };
 
+  const openExplorer = (signature: string) => {
+    Linking.openURL('https://solscan.io/tx/' + signature);
+  };
+
   const renderTransaction = ({item}: {item: TransactionItem}) => (
-    <View style={styles.transactionCard}>
+    <TouchableOpacity
+      style={styles.transactionCard}
+      onPress={() => openExplorer(item.id)}
+      activeOpacity={0.7}>
       <View style={[styles.transactionIcon, {backgroundColor: getIconBg(item)}]}>
         <Text style={styles.iconText}>{getTypeIcon(item)}</Text>
       </View>
@@ -164,7 +167,8 @@ export default function TransactionHistoryScreen() {
           {item.status === 'confirmed' ? '已确认' : '失败'}
         </Text>
       </View>
-    </View>
+      <Text style={styles.linkIcon}>↗</Text>
+    </TouchableOpacity>
   );
 
   if (loading && transactions.length === 0) {
@@ -260,6 +264,11 @@ const styles = StyleSheet.create({
   },
   transactionAmount: {
     alignItems: 'flex-end',
+  },
+  linkIcon: {
+    fontSize: 16,
+    color: '#6366f1',
+    marginLeft: 8,
   },
   amount: {
     fontSize: 16,

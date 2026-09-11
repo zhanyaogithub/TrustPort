@@ -45,6 +45,9 @@ const TOKEN_META: {[mint: string]: {symbol: string; name: string; decimals: numb
   '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R': {symbol: 'RAY', name: 'Raydium', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png'},
   'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm': {symbol: 'WIF', name: 'dogwifhat', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm/logo.png'},
   'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3': {symbol: 'PYTH', name: 'Pyth Network', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3/logo.svg'},
+  '21rweMLGYeMNonHW7H3xa5py17X6ZFRcHirCp9inRBQA': {symbol: 'IQ50', name: 'IQ50', decimals: 6, logoURI: ''},
+  '7i5KKsQ2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfT': {symbol: 'GMT', name: 'Green Metaverse Token', decimals: 8, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7i5KKsQ2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfT/logo.png'},
+  'AFbX8oqjGPAh84PbD1BFoPZDT4zPb2eV2e3bQj6ZtEwG': {symbol: 'GST', name: 'Green Satoshi Token', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/AFbX8oqjGPAh84PbD1BFoPZDT4zPb2eV2e3bQj6ZtEwG/logo.png'},
 };
 
 async function resolveTokenMeta(mint: string, connection: any): Promise<{symbol: string; name: string; decimals: number; logoURI: string | null}> {
@@ -101,6 +104,7 @@ export default function HomeScreen({navigation}: Props) {
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [totalUsd, setTotalUsd] = useState<number>(0);
   const [prices, setPrices] = useState<{[key: string]: number}>({});
+  const [priceChanges, setPriceChanges] = useState<{[key: string]: number}>({});
   const [assetFilter, setAssetFilter] = useState<string>('all');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const lastTapTimeRef = useRef<number>(0);
@@ -122,7 +126,7 @@ export default function HomeScreen({navigation}: Props) {
   const fetchPrices = async (): Promise<{[key: string]: number}> => {
     try {
       const resp = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=solana,usd-coin,tether&vs_currencies=usd'
+        'https://api.coingecko.com/api/v3/simple/price?ids=solana,usd-coin,tether&vs_currencies=usd&include_24hr_change=true'
       );
       const data = await resp.json();
       const p: {[key: string]: number} = {
@@ -131,13 +135,21 @@ export default function HomeScreen({navigation}: Props) {
         USDT: data?.tether?.usd || 1,
         WSOL: data?.solana?.usd || 0,
       };
+      const changes: {[key: string]: number} = {
+        SOL: data?.solana?.usd_24h_change || 0,
+        USDC: data?.['usd-coin']?.usd_24h_change || 0,
+        USDT: data?.tether?.usd_24h_change || 0,
+        WSOL: data?.solana?.usd_24h_change || 0,
+      };
       setPrices(p);
+      setPriceChanges(changes);
       console.log('[fetchPrices] Prices loaded:', JSON.stringify(p));
       return p;
     } catch (e: any) {
       console.log('[fetchPrices] Failed, using fallback:', e.message);
       const fallback = {SOL: 150, USDC: 1, USDT: 1, WSOL: 150};
       setPrices(fallback);
+      setPriceChanges({});
       return fallback;
     }
   };
@@ -216,11 +228,19 @@ export default function HomeScreen({navigation}: Props) {
         setTokenBalances([...tokens]); // Update with full metadata
       }
 
-      console.log('[loadAllBalances] Total tokens displayed:', tokens.length);
+      // Filter out completely unknown tokens (can't resolve name from any source)
+      const knownTokens = tokens.filter(t => {
+        if (t.mint === 'native') return true;
+        if (!t.name.endsWith('...')) return true;
+        return false;
+      });
+      setTokenBalances(knownTokens);
+
+      console.log('[loadAllBalances] Total tokens displayed:', knownTokens.length);
 
       // Calculate total USD value (SOL is already in tokens array)
       let total = 0;
-      for (const token of tokens) {
+      for (const token of knownTokens) {
         const tokenPrice = p[token.symbol] || 0;
         total += token.amount * tokenPrice;
       }
@@ -338,7 +358,16 @@ export default function HomeScreen({navigation}: Props) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity 
+        {solBalance > 0 && solBalance < 0.01 && (
+          <View style={styles.lowSolWarning}>
+            <Text style={styles.lowSolWarningIcon}>⚠️</Text>
+            <Text style={styles.lowSolWarningText}>
+              SOL 余额不足，可能无法支付交易手续费
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity
           style={styles.balanceCard}
           onPress={() => setShowCurrencyModal(true)}
           activeOpacity={0.8}>
@@ -377,9 +406,19 @@ export default function HomeScreen({navigation}: Props) {
                 <Text style={styles.tokenName} numberOfLines={1}>{token.name}</Text>
                 <Text style={styles.tokenAmount}>{token.symbol} · {token.amount.toFixed(token.amount < 1 ? 6 : 4)}</Text>
               </View>
-              <Text style={styles.tokenUsd}>
-                ${(token.amount * (prices[token.symbol] || 0)).toFixed(2)}
-              </Text>
+              <View style={styles.tokenRight}>
+                <Text style={styles.tokenUsd}>
+                  ${(token.amount * (prices[token.symbol] || 0)).toFixed(2)}
+                </Text>
+                {priceChanges[token.symbol] !== undefined && priceChanges[token.symbol] !== 0 && (
+                  <Text style={[
+                    styles.priceChange,
+                    priceChanges[token.symbol] >= 0 ? styles.priceChangeUp : styles.priceChangeDown,
+                  ]}>
+                    {priceChanges[token.symbol] >= 0 ? '▲' : '▼'} {Math.abs(priceChanges[token.symbol]).toFixed(1)}%
+                  </Text>
+                )}
+              </View>
             </View>
           )) : (
             <View style={styles.emptyFilter}>
@@ -925,10 +964,41 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 2,
   },
+  tokenRight: {
+    alignItems: 'flex-end',
+  },
   tokenUsd: {
     fontSize: 15,
     fontWeight: '600',
     color: '#ccc',
+  },
+  priceChange: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  priceChangeUp: {
+    color: '#4ade80',
+  },
+  priceChangeDown: {
+    color: '#ef4444',
+  },
+  lowSolWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    marginHorizontal: 20,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 10,
+  },
+  lowSolWarningIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  lowSolWarningText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#fbbf24',
   },
   currencyModalOverlay: {
     flex: 1,

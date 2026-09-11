@@ -11,6 +11,8 @@ import {
   Modal,
   FlatList,
   Image,
+  NativeModules,
+  Linking,
 } from 'react-native';
 import {NativeStackNavigationProp, NativeStackScreenProps} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
@@ -39,6 +41,9 @@ const TOKEN_META: {[mint: string]: {symbol: string; name: string; decimals: numb
   '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R': {symbol: 'RAY', name: 'Raydium', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png'},
   'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm': {symbol: 'WIF', name: 'dogwifhat', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm/logo.png'},
   'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3': {symbol: 'PYTH', name: 'Pyth Network', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3/logo.svg'},
+  '21rweMLGYeMNonHW7H3xa5py17X6ZFRcHirCp9inRBQA': {symbol: 'IQ50', name: 'IQ50', decimals: 6, logoURI: ''},
+  '7i5KKsQ2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfT': {symbol: 'GMT', name: 'Green Metaverse Token', decimals: 8, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7i5KKsQ2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfT/logo.png'},
+  'AFbX8oqjGPAh84PbD1BFoPZDT4zPb2eV2e3bQj6ZtEwG': {symbol: 'GST', name: 'Green Satoshi Token', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/AFbX8oqjGPAh84PbD1BFoPZDT4zPb2eV2e3bQj6ZtEwG/logo.png'},
 };
 
 async function resolveTokenMeta(mint: string, connection: any): Promise<{symbol: string; name: string; decimals: number; logoURI: string | null}> {
@@ -170,6 +175,14 @@ export default function TransferScreen({navigation, route}: Props) {
         }
         setTokenBalances([...tokens]); // Update with full metadata
       }
+
+      // Filter out completely unknown tokens (can't resolve name from any source)
+      const knownTokens = tokens.filter(t => {
+        if (t.mint === 'native') return true;
+        if (!t.name.endsWith('...')) return true;
+        return false;
+      });
+      setTokenBalances(knownTokens);
     } catch (error) {
       console.error('Failed to load balances:', error);
     }
@@ -177,6 +190,35 @@ export default function TransferScreen({navigation, route}: Props) {
 
   const loadBalance = async () => {
     await loadAllBalances();
+  };
+
+  const handleScanQR = async () => {
+    try {
+      const result = await NativeModules.QRScanner.scan();
+      if (result) {
+        try {
+          new PublicKey(result);
+          setRecipient(result);
+        } catch {
+          Alert.alert('无效地址', '扫描的内容不是有效的 Solana 钱包地址');
+        }
+      }
+    } catch (e: any) {
+      if (e.code !== 'SCAN_CANCELLED') {
+        Alert.alert('扫码失败', e.message || '无法识别二维码');
+      }
+    }
+  };
+
+  const handleMaxAmount = () => {
+    const token = tokenBalances.find(t => t.symbol === selectedCurrency);
+    if (!token) return;
+    if (selectedCurrency === 'SOL') {
+      const max = Math.max(0, token.amount - 0.005);
+      setAmount(max.toFixed(9));
+    } else {
+      setAmount(token.amount.toString());
+    }
   };
 
   const validateInputs = (): boolean => {
@@ -352,20 +394,35 @@ export default function TransferScreen({navigation, route}: Props) {
             />
             <TouchableOpacity
               style={styles.contactPickerButton}
+              onPress={handleScanQR}>
+              <Text style={styles.contactPickerButtonText}>📷</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.contactPickerButton}
               onPress={() => setShowContactPicker(true)}>
               <Text style={styles.contactPickerButtonText}>👤</Text>
             </TouchableOpacity>
           </View>
 
           <Text style={styles.label}>转账金额 ({selectedCurrency})</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="0.00"
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="decimal-pad"
-            placeholderTextColor="#666"
-          />
+          <View style={styles.amountRow}>
+            <TextInput
+              style={styles.amountInput}
+              placeholder="0.00"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="decimal-pad"
+              placeholderTextColor="#666"
+            />
+            <TouchableOpacity
+              style={styles.maxButton}
+              onPress={handleMaxAmount}>
+              <Text style={styles.maxButtonText}>MAX</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.maxHint}>
+            可用: {tokenBalances.find(t => t.symbol === selectedCurrency)?.amount.toFixed(4) || '0.0000'} {selectedCurrency}
+          </Text>
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -509,9 +566,16 @@ export default function TransferScreen({navigation, route}: Props) {
             </Text>
             <Text style={styles.resultMessage}>{transferResult?.message}</Text>
             {transferResult?.signature && (
-              <Text style={styles.resultSignature}>
-                签名: {transferResult.signature.slice(0, 16)}...
-              </Text>
+              <>
+                <Text style={styles.resultSignature}>
+                  签名: {transferResult.signature.slice(0, 16)}...
+                </Text>
+                <TouchableOpacity
+                  style={styles.explorerLink}
+                  onPress={() => Linking.openURL('https://solscan.io/tx/' + transferResult.signature)}>
+                  <Text style={styles.explorerLinkText}>在 Solana Explorer 中查看 ↗</Text>
+                </TouchableOpacity>
+              </>
             )}
             <TouchableOpacity
               style={[styles.resultButton, transferResult?.success ? styles.resultButtonSuccess : styles.resultButtonFail]}
@@ -573,6 +637,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     marginBottom: 16,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+    gap: 8,
+  },
+  amountInput: {
+    flex: 1,
+    backgroundColor: '#2a2a4e',
+    padding: 16,
+    borderRadius: 12,
+    color: '#fff',
+    fontSize: 16,
+  },
+  maxButton: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  maxButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  maxHint: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 16,
+    marginLeft: 4,
   },
   recipientRow: {
     flexDirection: 'row',
@@ -809,6 +904,19 @@ const styles = StyleSheet.create({
     color: '#666',
     fontFamily: 'monospace',
     marginBottom: 24,
+  },
+  explorerLink: {
+    marginTop: 8,
+    marginBottom: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    borderRadius: 8,
+  },
+  explorerLinkText: {
+    color: '#6366f1',
+    fontSize: 13,
+    fontWeight: '600',
   },
   resultButton: {
     marginTop: 16,
