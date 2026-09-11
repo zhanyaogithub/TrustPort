@@ -87,7 +87,6 @@ export function ContactsProvider({children}: ContactsProviderProps) {
       createdAt: Date.now(),
     };
     await saveContacts([newContact, ...existing]);
-    console.log('[useContacts] Contact added:', address.slice(0, 8));
   }, [contacts]);
 
   /**
@@ -110,14 +109,12 @@ export function ContactsProvider({children}: ContactsProviderProps) {
       createdAt: Date.now(),
     };
     await saveContacts([newContact, ...existing]);
-    console.log('[useContacts] Contact verified and added:', address.slice(0, 8));
     return true;
   }, [contacts]);
 
   const removeContact = useCallback(async (address: string) => {
     const updated = contacts.filter(c => c.address !== address);
     await saveContacts(updated);
-    console.log('[useContacts] Contact removed:', address.slice(0, 8));
   }, [contacts]);
 
   const hasContact = useCallback((address: string): boolean => {
@@ -129,7 +126,6 @@ export function ContactsProvider({children}: ContactsProviderProps) {
       c.address === address ? {...c, remark: remark || undefined} : c
     );
     await saveContacts(updated);
-    console.log('[useContacts] Remark updated:', address.slice(0, 8), '->', remark);
   }, [contacts]);
 
   const value: ContactsContextType = {

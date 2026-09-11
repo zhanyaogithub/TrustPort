@@ -8,8 +8,8 @@ import {
   ScrollView,
   Linking,
   Alert,
-  Clipboard,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import {useWallet} from '../hooks/useWallet';

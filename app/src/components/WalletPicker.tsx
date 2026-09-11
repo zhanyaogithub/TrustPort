@@ -42,13 +42,11 @@ export default function WalletPicker({visible, onSelect, onCancel}: WalletPicker
       const WalletDiscovery = NativeModules.WalletDiscovery;
       if (!WalletDiscovery) {
         // Fallback: if native module not available, just proceed without picker
-        console.warn('[WalletPicker] WalletDiscovery native module not available');
         setError('无法加载钱包发现模块');
         setLoading(false);
         return;
       }
       const result = await WalletDiscovery.discoverWallets();
-      console.log('[WalletPicker] Discovered wallets:', result?.length || 0);
       setWallets(result || []);
       if (!result || result.length === 0) {
         setError('未发现已安装的钱包应用');

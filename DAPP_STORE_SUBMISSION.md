@@ -53,8 +53,8 @@ wallet, transfer, solana, qr-code, contacts, spl-tokens, mobile
 
 | 素材 | 规格 | 状态 |
 |------|------|------|
-| App Icon | 512x512 PNG | 待生成 |
-| Feature Graphic | 1024x500 PNG | 待生成 |
+| App Icon | 512x512 PNG | ✅ 已生成 |
+| Feature Graphic | 1024x500 PNG | ✅ 已生成 |
 | Screenshot 1 | 手机竖屏 (≥320px宽) | 待截取 |
 | Screenshot 2 | 手机竖屏 | 待截取 |
 | Screenshot 3 | 手机竖屏 | 待截取 |

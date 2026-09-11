@@ -26,7 +26,7 @@ TrustPort 是一款基于 Solana Mobile 的可信联系人转账钱包应用，�
 | Demo 视频 | ❌ 待完成 | — |
 | Pitch Deck | ❌ 待完成 | — |
 | dApp Store 发布 | ❌ 待完成 | — |
-| GitHub Push | ⏸️ 待网络恢复 | — |
+| GitHub Push | ✅ 已完成 | — |
 
 ## 已完成功能清单
 

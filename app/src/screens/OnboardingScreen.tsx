@@ -27,7 +27,6 @@ export default function OnboardingScreen({navigation}: Props) {
     if (connected && !hasNavigated.current) {
       if (navigation.isFocused()) {
         hasNavigated.current = true;
-        console.log('[Onboarding] Navigating to Home');
         navigation.navigate('Home');
       }
     }
@@ -39,12 +38,10 @@ export default function OnboardingScreen({navigation}: Props) {
   };
 
   const handleWalletSelect = async (wallet: WalletInfo) => {
-    console.log('[Onboarding] Selected wallet:', wallet.appName, wallet.packageName);
     setPickerVisible(false);
     try {
       await connect(wallet.packageName);
       // Navigate directly after successful connect - don't rely on useEffect/AppState
-      console.log('[Onboarding] Connect resolved, navigating to Home directly');
       navigation.navigate('Home');
     } catch (error: any) {
       console.error('[Onboarding] Connection failed:', error.message);

@@ -20,6 +20,7 @@ import {useWallet} from '../hooks/useWallet';
 import {useContacts} from '../hooks/useContacts';
 import {PublicKey, LAMPORTS_PER_SOL, SystemProgram, Transaction} from '@solana/web3.js';
 import {TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddressSync, getAccount, createAssociatedTokenAccountIdempotentInstruction} from '@solana/spl-token';
+import {TOKEN_META, resolveTokenMeta} from '../utils/tokenMeta';
 
 interface TokenBalance {
   mint: string;
@@ -28,57 +29,6 @@ interface TokenBalance {
   amount: number;
   decimals: number;
   logoURI?: string;
-}
-
-const TOKEN_META: {[mint: string]: {symbol: string; name: string; decimals: number; logoURI: string}} = {
-  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': {symbol: 'USDC', name: 'USD Coin', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png'},
-  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': {symbol: 'USDT', name: 'Tether USD', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.svg'},
-  'So11111111111111111111111111111111111111112': {symbol: 'WSOL', name: 'Wrapped SOL', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'},
-  'mSoLzY6H4nc4n618KgvFMV7gEL437KbMKg6U3BjB3nK': {symbol: 'mSOL', name: 'Marinade Staked SOL', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzY6H4nc4n618KgvFMV7gEL437KbMKg6U3BjB3nK/logo.png'},
-  '7dHbWXmci3dT8UFKYYZSSLaV8FzudSVL7kgB2xNgRPeA': {symbol: 'stSOL', name: 'Lido Staked SOL', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7dHbWXmci3dT8UFKYYZSSLaV8FzudSVL7kgB2xNgRPeA/logo.png'},
-  'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263': {symbol: 'BONK', name: 'Bonk', decimals: 5, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/logo.png'},
-  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN': {symbol: 'JUP', name: 'Jupiter', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN/logo.png'},
-  '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R': {symbol: 'RAY', name: 'Raydium', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png'},
-  'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm': {symbol: 'WIF', name: 'dogwifhat', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm/logo.png'},
-  'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3': {symbol: 'PYTH', name: 'Pyth Network', decimals: 6, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3/logo.svg'},
-  '21rweMLGYeMNonHW7H3xa5py17X6ZFRcHirCp9inRBQA': {symbol: 'IQ50', name: 'IQ50', decimals: 6, logoURI: ''},
-  '7i5KKsQ2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfT': {symbol: 'GMT', name: 'Green Metaverse Token', decimals: 8, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7i5KKsQ2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfT/logo.png'},
-  'AFbX8oqjGPAh84PbD1BFoPZDT4zPb2eV2e3bQj6ZtEwG': {symbol: 'GST', name: 'Green Satoshi Token', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/AFbX8oqjGPAh84PbD1BFoPZDT4zPb2eV2e3bQj6ZtEwG/logo.png'},
-};
-
-async function resolveTokenMeta(mint: string, connection: any): Promise<{symbol: string; name: string; decimals: number; logoURI: string | null}> {
-  if (TOKEN_META[mint]) {
-    return {...TOKEN_META[mint]};
-  }
-  try {
-    const resp = await fetch(`https://tokens.jup.ag/token/${mint}`);
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data?.symbol && data?.decimals !== undefined) {
-        return {symbol: data.symbol, name: data.name || data.symbol, decimals: data.decimals, logoURI: data.logoURI || null};
-      }
-    }
-  } catch (e) {}
-  try {
-    const [metadataPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('metadata'), new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s').toBuffer(), new PublicKey(mint).toBuffer()],
-      new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s'),
-    );
-    const info = await connection.getAccountInfo(metadataPda);
-    if (info?.data && info.data.length > 100) {
-      const buf = info.data;
-      let off = 1 + 32 + 32;
-      const readStr = (o: number) => {
-        const len = buf.readUInt32LE(o);
-        return {str: buf.slice(o + 4, o + 4 + len).toString('utf8').replace(/\0+$/, '').trim(), next: o + 4 + len};
-      };
-      const nameRes = readStr(off); off = nameRes.next;
-      const symRes = readStr(off); off = symRes.next;
-      const uriRes = readStr(off);
-      return {symbol: symRes.str || mint.slice(0, 4), name: nameRes.str || mint.slice(0, 8), decimals: 9, logoURI: null};
-    }
-  } catch (e) {}
-  return {symbol: mint.slice(0, 4) + '...', name: mint.slice(0, 8) + '...', decimals: 9, logoURI: null};
 }
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Transfer'>;
@@ -127,7 +77,7 @@ export default function TransferScreen({navigation, route}: Props) {
             }
           }
         } catch (e: any) {
-          console.log(`[TransferScreen] Token program query error: ${e.message}`);
+          // Token program query error, continue
         }
       }
 
@@ -186,10 +136,6 @@ export default function TransferScreen({navigation, route}: Props) {
     } catch (error) {
       console.error('Failed to load balances:', error);
     }
-  };
-
-  const loadBalance = async () => {
-    await loadAllBalances();
   };
 
   const handleScanQR = async () => {
@@ -296,7 +242,6 @@ export default function TransferScreen({navigation, route}: Props) {
             if (acc.amount > 0n) {
               fromTokenAccount = ata;
               usedProgramId = programId;
-              console.log(`[Transfer] Found ${selectedCurrency} in ${programId === TOKEN_PROGRAM_ID ? 'Token' : 'Token-2022'}: ${acc.amount}`);
               break;
             }
           } catch (e) {
@@ -630,14 +575,6 @@ const styles = StyleSheet.create({
     color: '#888',
     marginBottom: 8,
   },
-  input: {
-    backgroundColor: '#2a2a4e',
-    padding: 16,
-    borderRadius: 12,
-    color: '#fff',
-    fontSize: 16,
-    marginBottom: 16,
-  },
   amountRow: {
     flexDirection: 'row',
     marginBottom: 4,
@@ -798,11 +735,6 @@ const styles = StyleSheet.create({
   },
   currencyOptionSelected: {
     backgroundColor: '#6366f1',
-  },
-  currencySymbol: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
   },
   currencyBalance: {
     fontSize: 16,
