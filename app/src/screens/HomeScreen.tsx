@@ -71,58 +71,73 @@ export default function HomeScreen({navigation}: Props) {
     const p: {[key: string]: number} = {};
     const changes: {[key: string]: number} = {};
 
-    // 1. Try Jupiter Price API for all token mints (covers any SPL token)
-    if (mints && mints.length > 0) {
+    // Run CoinGecko and Jupiter in PARALLEL — one failing doesn't block the other
+    const coinGeckoIds = 'solana,usd-coin,tether,seeker';
+
+    const fetchCoinGecko = async () => {
       try {
-        const mintList = mints.join(',');
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
+        const timeout = setTimeout(() => controller.abort(), 10000);
         const resp = await fetch(
-          `https://api.jup.ag/price/v2?ids=${mintList}`,
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coinGeckoIds}&vs_currencies=usd&include_24hr_change=true`,
           {signal: controller.signal},
         );
         clearTimeout(timeout);
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data?.data) {
-            for (const [mint, info] of Object.entries(data.data) as [string, any][]) {
-              if (info?.price) {
-                p[mint] = parseFloat(info.price);
-              }
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data?.solana?.usd) {
+          p['SOL'] = data.solana.usd;
+          p['WSOL'] = data.solana.usd;
+          changes['SOL'] = data.solana.usd_24h_change || 0;
+          changes['WSOL'] = data.solana.usd_24h_change || 0;
+        }
+        if (data?.['usd-coin']?.usd) {
+          p['USDC'] = data['usd-coin'].usd;
+          changes['USDC'] = data['usd-coin'].usd_24h_change || 0;
+        }
+        if (data?.tether?.usd) {
+          p['USDT'] = data.tether.usd;
+          changes['USDT'] = data.tether.usd_24h_change || 0;
+        }
+        if (data?.seeker?.usd) {
+          p['SKR'] = data.seeker.usd;
+          changes['SKR'] = data.seeker.usd_24h_change || 0;
+        }
+      } catch (e) {}
+    };
+
+    const fetchJupiter = async () => {
+      if (!mints || mints.length === 0) return;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const resp = await fetch(
+          `https://api.jup.ag/price/v2?ids=${mints.join(',')}`,
+          {signal: controller.signal},
+        );
+        clearTimeout(timeout);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data?.data) {
+          for (const [mint, info] of Object.entries(data.data) as [string, any][]) {
+            if (info?.price) {
+              // Jupiter uses mint as key; also map to symbol for TOKEN_META entries
+              p[mint] = parseFloat(info.price);
+              const meta = TOKEN_META[mint];
+              if (meta) { p[meta.symbol] = p[meta.symbol] || p[mint]; }
             }
           }
         }
       } catch (e) {}
-    }
+    };
 
-    // 2. Fallback: CoinGecko for SOL/USDC/USDT (in case Jupiter fails)
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const resp = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=solana,usd-coin,tether&vs_currencies=usd&include_24hr_change=true',
-        {signal: controller.signal},
-      );
-      clearTimeout(timeout);
-      const data = await resp.json();
-      // Map to symbol-based keys for backward compat
-      const solPrice = data?.solana?.usd || p['So11111111111111111111111111111111111111112'] || 0;
-      const usdcPrice = data?.['usd-coin']?.usd || p['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'] || 1;
-      const usdtPrice = data?.tether?.usd || p['Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'] || 1;
-      // Set symbol-based keys (used by UI)
-      p['SOL'] = p['SOL'] || solPrice;
-      p['USDC'] = p['USDC'] || usdcPrice;
-      p['USDT'] = p['USDT'] || usdtPrice;
-      p['WSOL'] = p['WSOL'] || solPrice;
-      changes['SOL'] = data?.solana?.usd_24h_change || 0;
-      changes['USDC'] = data?.['usd-coin']?.usd_24h_change || 0;
-      changes['USDT'] = data?.tether?.usd_24h_change || 0;
-      changes['WSOL'] = data?.solana?.usd_24h_change || 0;
-    } catch (e: any) {
-      if (!p['SOL']) {
-        p['SOL'] = 150; p['USDC'] = 1; p['USDT'] = 1; p['WSOL'] = 150;
-      }
-    }
+    // Execute both in parallel
+    await Promise.all([fetchCoinGecko(), fetchJupiter()]);
+
+    // Hardcoded safety net if both APIs failed entirely
+    if (!p['SOL'] && !p['WSOL']) { p['SOL'] = 150; p['WSOL'] = 150; }
+    if (!p['USDC']) { p['USDC'] = 1; }
+    if (!p['USDT']) { p['USDT'] = 1; }
 
     setPrices(p);
     setPriceChanges(changes);
