@@ -66,66 +66,36 @@ export default function HomeScreen({navigation}: Props) {
 
   const trustedCount = contacts.length;
 
-  // Symbol → CoinGecko ID mapping for dynamic price queries
-  const SYMBOL_TO_CG: {[sym: string]: string} = {
-    SOL: 'solana', WSOL: 'solana', USDC: 'usd-coin', USDT: 'tether',
-    SKR: 'seeker', BIRB: 'birb', BONK: 'bonk1', JUP: 'jupiter-exchange-solana',
-    RAY: 'raydium', WIF: 'dogwifhat', PYTH: 'pyth-network', GMT: 'stepn',
-    GST: 'green-satoshi-token', MSOL: 'msol', STSOL: 'lido-staked-sol',
-    MOONWALK: 'moonwalk-fit', MOON: 'moon-on-sol',
-  };
-
   const fetchPrices = async (mints?: string[], symbols?: string[]): Promise<{[key: string]: number}> => {
     const p: {[key: string]: number} = {};
     const changes: {[key: string]: number} = {};
 
-    // Build dynamic CoinGecko query from actual token symbols
-    const cgIds = new Set<string>(['solana', 'usd-coin', 'tether']);
-    if (symbols) {
-      for (const sym of symbols) {
-        const cgId = SYMBOL_TO_CG[sym.toUpperCase()];
-        if (cgId) cgIds.add(cgId);
-      }
-    }
-    const coinGeckoQuery = Array.from(cgIds).join(',');
+    // All three sources run in parallel — no hardcoded symbol mappings needed
 
-    const fetchCoinGecko = async () => {
+    // 1. CoinGecko simple/price for SOL + stablecoins (always included)
+    const fetchBasicPrices = async () => {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         const resp = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coinGeckoQuery}&vs_currencies=usd&include_24hr_change=true`,
+          'https://api.coingecko.com/api/v3/simple/price?ids=solana,usd-coin,tether&vs_currencies=usd&include_24hr_change=true',
           {signal: controller.signal},
         );
         clearTimeout(timeout);
         if (!resp.ok) return;
         const data = await resp.json();
-        // Map CoinGecko IDs back to symbols
-        const cgToSymbols: {[cgId: string]: string[]} = {};
-        for (const [sym, cgId] of Object.entries(SYMBOL_TO_CG)) {
-          if (!cgToSymbols[cgId]) cgToSymbols[cgId] = [];
-          cgToSymbols[cgId].push(sym);
+        if (data?.solana?.usd) {
+          p['SOL'] = data.solana.usd;
+          p['WSOL'] = data.solana.usd;
+          changes['SOL'] = data.solana.usd_24h_change || 0;
         }
-        cgToSymbols['solana'] = ['SOL', 'WSOL'];
-        cgToSymbols['usd-coin'] = ['USDC'];
-        cgToSymbols['tether'] = ['USDT'];
-        for (const [cgId, info] of Object.entries(data) as [string, any][]) {
-          if (info?.usd) {
-            const syms = cgToSymbols[cgId] || [];
-            for (const sym of syms) {
-              p[sym] = info.usd;
-            }
-            if (info.usd_24h_change) {
-              for (const sym of syms) {
-                changes[sym] = info.usd_24h_change;
-              }
-            }
-          }
-        }
+        if (data?.['usd-coin']?.usd) { p['USDC'] = data['usd-coin'].usd; }
+        if (data?.tether?.usd) { p['USDT'] = data.tether.usd; }
       } catch (e) {}
     };
 
-    const fetchJupiter = async () => {
+    // 2. Jupiter Price API — covers any token with DEX liquidity (generic, by mint)
+    const fetchJupiterPrices = async () => {
       if (!mints || mints.length === 0) return;
       try {
         const controller = new AbortController();
@@ -149,8 +119,32 @@ export default function HomeScreen({navigation}: Props) {
       } catch (e) {}
     };
 
-    await Promise.all([fetchCoinGecko(), fetchJupiter()]);
+    // 3. CoinGecko contract endpoint — generic, works by mint address for ANY Solana token
+    const fetchCoinGeckoContracts = async () => {
+      if (!mints || mints.length === 0) return;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const resp = await fetch(
+          `https://api.coingecko.com/api/v3/simple/token_price/solana?contract_addresses=${mints.join(',')}&vs_currencies=usd`,
+          {signal: controller.signal},
+        );
+        clearTimeout(timeout);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        for (const [addr, info] of Object.entries(data) as [string, any][]) {
+          if (info?.usd) {
+            p[addr] = p[addr] || info.usd; // Don't overwrite Jupiter prices
+            const meta = TOKEN_META[addr];
+            if (meta) { p[meta.symbol] = p[meta.symbol] || info.usd; }
+          }
+        }
+      } catch (e) {}
+    };
 
+    await Promise.all([fetchBasicPrices(), fetchJupiterPrices(), fetchCoinGeckoContracts()]);
+
+    // Safety net if all APIs failed
     if (!p['SOL'] && !p['WSOL']) { p['SOL'] = 150; p['WSOL'] = 150; }
     if (!p['USDC']) { p['USDC'] = 1; }
     if (!p['USDT']) { p['USDT'] = 1; }
