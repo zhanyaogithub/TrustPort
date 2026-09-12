@@ -22,7 +22,8 @@ TrustPort communicates with the following public services to provide core functi
 
 - **Solana RPC (api.mainnet-beta.solana.com)** — To query your wallet balance, token accounts, and transaction history on the Solana blockchain. Only your public wallet address is sent.
 - **CoinGecko API (api.coingecko.com)** — To fetch real-time cryptocurrency prices and 24-hour price changes. No personal data is sent.
-- **Jupiter Token API (tokens.jup.ag)** — To resolve SPL token metadata (name, symbol, logo). No personal data is sent.
+- **DexScreener API (api.dexscreener.com)** — To fetch decentralized exchange token prices by mint address. No personal data is sent.
+- **Jupiter Token List (tokens.jup.ag)** — To resolve SPL token metadata (name, symbol, logo). No personal data is sent.
 
 ### Information We Do NOT Collect
 

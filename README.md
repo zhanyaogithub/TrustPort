@@ -11,7 +11,7 @@ TrustPort 是一款基于 Solana Mobile 的转账钱包应用，专为 Solana Se
 - **可信联系人系统**：通过 QR 码互扫 + 口令验证建立双向信任关系，联系人存储在设备本地
 - **多币种支持**：SOL 原生代币 + SPL 代币（USDC、USDT、BONK 等 13+ 种已知代币）
 - **多钱包适配**：支持 Phantom（MWA）、Seed Vault、本地钱包三种模式
-- **资产智能展示**：Jupiter API + Metaplex 链上元数据解析，24h 涨跌幅显示，资产筛选过滤
+- **资产智能展示**：DexScreener + CoinGecko 双源价格、Metaplex 链上元数据解析，24h 涨跌幅显示，资产筛选过滤
 - **转账体验优化**：扫码填地址、MAX 一键最大金额、Solana Explorer 交易查看
 - **原生 QR 能力**：ZXing 扫码引擎、QR 码生成与相册保存
 
@@ -21,8 +21,8 @@ TrustPort 是一款基于 Solana Mobile 的转账钱包应用，专为 Solana Se
 - **框架**：React Native 0.73.4 + TypeScript
 - **钱包连接**：@solana-mobile/mobile-wallet-adapter
 - **Solana SDK**：@solana/web3.js + @solana/spl-token
-- **代币元数据**：Jupiter API + Metaplex 链上 Borsh 解析（三级降级策略）
-- **价格数据**：CoinGecko API（含 24h 涨跌幅）
+- **代币元数据**：TOKEN_META 硬编码 + Jupiter Token List API + Metaplex 链上 Borsh 解析（三级降级策略）
+- **价格数据**：DexScreener Batch API + CoinGecko simple/price（双源并行，含 24h 涨跌幅）
 - **导航**：React Navigation v6
 - **本地存储**：@react-native-async-storage/async-storage
 - **QR 码**：react-native-qrcode-svg（生成）+ ZXing Android Native Module（扫码）
@@ -105,8 +105,11 @@ adb install app/build/outputs/apk/release/app-release.apk
 - [x] 多币种资产管理与转账
 - [x] 原生 Android 模块（扫码、相册保存）
 - [x] APK 构建与 Seeker 设备部署
-- [ ] dApp Store 上架
-- [ ] Demo 视频与 Pitch Deck
+- [x] 价格数据优化（DexScreener 批量查询 + 单遍架构）
+- [x] dApp Store 素材准备（Icon、Banner、Graphic）
+- [ ] dApp Store 上架审核
+- [ ] Demo 视频录制
+- [ ] Pitch Deck 制作
 
 ## 许可证
 

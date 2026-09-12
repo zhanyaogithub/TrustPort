@@ -1,16 +1,14 @@
 # TrustPort - dApp Store 提交信息
 
-> 本文档包含在 Solana dApp Store Publisher Portal 上创建应用列表时所需的全部信息。
+> Solana dApp Store 应用列表信息参考。
 
 ## Publisher 信息
 
 | 字段 | 值 |
 |------|-----|
-| Publisher Keypair | `/Users/zhanyao/.config/solana/trustport-publisher.json` |
 | Publisher Pubkey | `4owS9JD1GPKpxPvM4eoeqSWbKcNJfCaKfEyZEZa1k9DL` |
 | Publisher Name | TrustPort |
 | Website | https://github.com/zhanyaogithub/TrustPort |
-| Support Email | (填写你的邮箱) |
 
 ## App 基本信息
 
@@ -20,7 +18,7 @@
 | Category | Finance / Wallet |
 | Rating | Everyone |
 
-### 短描述 (Short Description, ≤80字符)
+### 短描述 (Short Description)
 
 ```
 Solana 可信联系人转账钱包，QR 码建立信任，多币种安全转账
@@ -49,15 +47,14 @@ Built for Solana Mobile Hackathon 2026 "CLOCK IN"
 wallet, transfer, solana, qr-code, contacts, spl-tokens, mobile
 ```
 
-## 素材要求
+## 素材清单
 
-| 素材 | 规格 | 状态 |
+| 素材 | 规格 | 路径 |
 |------|------|------|
-| App Icon | 512x512 PNG | ✅ 已生成 |
-| Feature Graphic | 1024x500 PNG | ✅ 已生成 |
-| Screenshot 1 | 手机竖屏 (≥320px宽) | 待截取 |
-| Screenshot 2 | 手机竖屏 | 待截取 |
-| Screenshot 3 | 手机竖屏 | 待截取 |
+| App Icon | 512×512 PNG | `assets/store-listing/icon-512.png` |
+| Banner | 1200×600 PNG | `assets/store-listing/banner-1200x600.png` |
+| Feature Graphic | 1200×1200 PNG | `assets/store-listing/graphic-1200x1200.png` |
+| Preview Screenshots | 1200×2670 PNG | `assets/store-listing/screenshot-*.png` |
 
 ### 建议截图内容
 
@@ -65,31 +62,9 @@ wallet, transfer, solana, qr-code, contacts, spl-tokens, mobile
 2. **转账页面** — 展示扫码、MAX 按钮、币种选择
 3. **QR 码建关系** — 展示分享二维码 / 扫码确认流程
 
-## 发布命令
+## 相关链接
 
-```bash
-# 1. 确保 dapp-store CLI 已安装
-npm install -g @solana-mobile/dapp-store-cli
-
-# 2. 设置 Portal API Key（从 Publisher Portal 获取）
-export DAPP_STORE_API_KEY="your-api-key-here"
-
-# 3. 发布 APK
-npx dapp-store \
-  --apk-file /Users/zhanyao/Documents/Qoder/solana/apk/TrustPort-20260911-0919.apk \
-  --whats-new "TrustPort v1.0 - 可信联系人转账钱包" \
-  --keypair /Users/zhanyao/.config/solana/trustport-publisher.json \
-  --verbose
-```
-
-## Publisher Portal 链接
-
-- 注册/登录: https://dappstore.solanamobile.com
-- 文档: https://docs.solanamobile.com/dapp-store/publishing
-
-## 注意事项
-
-1. Publisher 账户需要持有足够的 SOL 用于链上交易费（约 0.1 SOL）
-2. dApp Store 审核通常需要 1-3 个工作日
-3. 每次更新版本都需要通过 CLI 重新上传 APK
-4. 隐私政策 URL 可以先用 GitHub README 链接，后续补完整页面
+- Publisher Portal: https://dappstore.solanamobile.com
+- 发布文档: https://docs.solanamobile.com/dapp-store/publishing
+- Privacy Policy: https://github.com/zhanyaogithub/TrustPort/blob/main/PRIVACY_POLICY.md
+- EULA: https://github.com/zhanyaogithub/TrustPort/blob/main/EULA.md

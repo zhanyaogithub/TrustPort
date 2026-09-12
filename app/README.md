@@ -54,7 +54,7 @@ app/
 ## 页面功能
 
 ### HomeScreen（首页）
-- 总资产 USD 估值（CoinGecko 价格）
+- 总资产 USD 估值（DexScreener + CoinGecko 双源价格）
 - 代币列表（logo + 全名 + 余额 + 24h 涨跌）
 - 资产筛选（隐藏小额、隐藏零余额、按价值排序）
 - SOL 余额不足警告
@@ -99,7 +99,7 @@ app/
 三级降级策略，最大化覆盖率：
 
 1. **TOKEN_META 硬编码表**（14 种已知代币）— 即时显示
-2. **Jupiter API** (`tokens.jup.ag`) — 在线查询
+2. **Jupiter Token List** (`tokens.jup.ag`) — 在线查询 symbol/logo
 3. **Metaplex 链上 Borsh 解析** — 最后兜底
 
 完全无法解析的代币（名称为地址截断）被过滤不显示。
@@ -129,5 +129,6 @@ RPC 端点配置在 `useWallet.tsx` 中，默认使用 `https://api.mainnet-beta
 ## 已知问题
 
 - 并行 RPC 请求 batch size > 3 时可能触发限流，交易记录加载已限制为 3 个一批
-- Jupiter API 偶尔超时，代币元数据会降级到 Metaplex 链上解析
+- CoinGecko 免费 API 有速率限制，高频请求时可能返回空数据，已设置安全网兜底价格
+- DexScreener 对低流动性代币可能返回不准确价格，已知代币优先使用 symbol 查价避免误匹配
 - Samsung Secure Folder (User 150) 中的旧版 APK 无法通过 adb 卸载，需手动清理
