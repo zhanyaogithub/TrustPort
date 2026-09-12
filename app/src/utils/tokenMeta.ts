@@ -16,31 +16,30 @@ export const TOKEN_META: {[mint: string]: {symbol: string; name: string; decimal
   'AFbX8oqjGPAh84PbD1BFoPZDT4zPb2eV2e3bQj6ZtEwG': {symbol: 'GST', name: 'Green Satoshi Token', decimals: 9, logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/AFbX8oqjGPAh84PbD1BFoPZDT4zPb2eV2e3bQj6ZtEwG/logo.png'},
 };
 
-export async function resolveTokenMeta(mint: string, connection: any): Promise<{symbol: string; name: string; decimals: number; logoURI: string | null}> {
-  // 1. Check hardcoded map
-  if (TOKEN_META[mint]) {
-    return {...TOKEN_META[mint]};
-  }
-  // 2. Try Jupiter token list
+/**
+ * Read decimals directly from the on-chain Mint account via RPC.
+ * Mint layout: mintAuthorityOption(4) + mintAuthority(32) + supply(8) + decimals(1) = offset 44
+ */
+async function getMintDecimals(mint: string, connection: any): Promise<number | null> {
   try {
-    const resp = await fetch(`https://tokens.jup.ag/token/${mint}`);
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data?.symbol && data?.decimals !== undefined) {
-        return {
-          symbol: data.symbol,
-          name: data.name || data.symbol,
-          decimals: data.decimals,
-          logoURI: data.logoURI || null,
-        };
-      }
+    const mintPubkey = new PublicKey(mint);
+    const info = await connection.getAccountInfo(mintPubkey);
+    if (info?.data && info.data.length >= 45) {
+      return info.data[44]; // decimals byte at offset 44
     }
   } catch (e) {}
-  // 3. Try Metaplex on-chain metadata
+  return null;
+}
+
+/**
+ * Read symbol/name from Metaplex on-chain metadata PDA.
+ */
+async function getMetaplexMeta(mint: string, connection: any): Promise<{symbol: string; name: string; logoURI: string | null} | null> {
   try {
+    const METADATA_PROGRAM = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
     const [metadataPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('metadata'), new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s').toBuffer(), new PublicKey(mint).toBuffer()],
-      new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s'),
+      [Buffer.from('metadata'), METADATA_PROGRAM.toBuffer(), new PublicKey(mint).toBuffer()],
+      METADATA_PROGRAM,
     );
     const info = await connection.getAccountInfo(metadataPda);
     if (info?.data && info.data.length > 100) {
@@ -53,8 +52,51 @@ export async function resolveTokenMeta(mint: string, connection: any): Promise<{
       const nameRes = readStr(off); off = nameRes.next;
       const symRes = readStr(off); off = symRes.next;
       const uriRes = readStr(off);
-      return {symbol: symRes.str || mint.slice(0, 4), name: nameRes.str || mint.slice(0, 8), decimals: 9, logoURI: null};
+      return {
+        symbol: symRes.str || '',
+        name: nameRes.str || '',
+        logoURI: uriRes.str || null,
+      };
     }
   } catch (e) {}
-  return {symbol: mint.slice(0, 4) + '...', name: mint.slice(0, 8) + '...', decimals: 9, logoURI: null};
+  return null;
+}
+
+export async function resolveTokenMeta(mint: string, connection: any): Promise<{symbol: string; name: string; decimals: number; logoURI: string | null}> {
+  // 1. Check hardcoded map (instant, includes logoURI)
+  if (TOKEN_META[mint]) {
+    return {...TOKEN_META[mint]};
+  }
+
+  // 2. Try Jupiter verified token list (best metadata + logo)
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const resp = await fetch(`https://tokens.jup.ag/token/${mint}`, {signal: controller.signal});
+    clearTimeout(timeout);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data?.symbol && data?.decimals !== undefined) {
+        return {
+          symbol: data.symbol,
+          name: data.name || data.symbol,
+          decimals: data.decimals,
+          logoURI: data.logoURI || null,
+        };
+      }
+    }
+  } catch (e) {}
+
+  // 3. Direct RPC: read decimals from Mint account + Metaplex for symbol/name
+  const [decimals, metaplex] = await Promise.all([
+    getMintDecimals(mint, connection),
+    getMetaplexMeta(mint, connection),
+  ]);
+
+  const dec = decimals ?? 9;
+  const symbol = metaplex?.symbol || mint.slice(0, 6);
+  const name = metaplex?.name || `Token (${mint.slice(0, 4)}...)`;
+  const logoURI = metaplex?.logoURI || null;
+
+  return {symbol, name, decimals: dec, logoURI};
 }
