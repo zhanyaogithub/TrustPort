@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrustPort - Pitch Deck</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0D0B1A;
+    color: #fff;
+  }
+
+  .slide {
+    width: 1280px;
+    height: 720px;
+    margin: 40px auto;
+    padding: 60px 80px;
+    background: linear-gradient(135deg, #0D0B1A 0%, #1a1040 50%, #0D0B1A 100%);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    box-shadow: 0 20px 60px rgba(124, 58, 237, 0.15);
+  }
+
+  .slide::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(124, 58, 237, 0.12) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .slide::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -10%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .slide-content {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+  }
+
+  /* Slide 1: Title */
+  .slide-title {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    height: 100%;
+  }
+
+  .logo-shield {
+    width: 100px;
+    height: 120px;
+    background: linear-gradient(180deg, #7C3AED 0%, #3B82F6 100%);
+    clip-path: polygon(50% 0%, 100% 15%, 100% 75%, 50% 100%, 0% 75%, 0% 15%);
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .logo-shield-inner {
+    width: 60px;
+    height: 72px;
+    background: linear-gradient(180deg, #9333EA 0%, #2563EB 100%);
+    clip-path: polygon(50% 5%, 95% 18%, 95% 72%, 50% 95%, 5% 72%, 5% 18%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+  }
+
+  h1 {
+    font-size: 56px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #fff 0%, #c4b5fd 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+  }
+
+  .subtitle {
+    font-size: 22px;
+    color: #a78bfa;
+    font-weight: 400;
+    margin-bottom: 40px;
+  }
+
+  .tagline {
+    font-size: 16px;
+    color: #64748b;
+    max-width: 600px;
+    line-height: 1.6;
+  }
+
+  .badge {
+    display: inline-block;
+    background: rgba(124, 58, 237, 0.2);
+    border: 1px solid rgba(124, 58, 237, 0.4);
+    padding: 8px 20px;
+    border-radius: 24px;
+    font-size: 14px;
+    color: #a78bfa;
+    margin-top: 24px;
+  }
+
+  /* Slide 2: Problem & Solution */
+  h2 {
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 40px;
+    color: #fff;
+  }
+
+  h2 span {
+    background: linear-gradient(135deg, #7C3AED, #3B82F6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    height: calc(100% - 80px);
+  }
+
+  .col-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 36px;
+  }
+
+  .col-card h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #c4b5fd;
+  }
+
+  .col-card p, .col-card li {
+    font-size: 16px;
+    line-height: 1.8;
+    color: #94a3b8;
+  }
+
+  .col-card ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .col-card ul li {
+    padding: 6px 0;
+    padding-left: 24px;
+    position: relative;
+  }
+
+  .col-card ul li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    width: 8px;
+    height: 8px;
+    background: #7C3AED;
+    border-radius: 50%;
+  }
+
+  .problem-col { border-color: rgba(239, 68, 68, 0.2); }
+  .problem-col h3 { color: #fca5a5; }
+  .problem-col ul li::before { background: #ef4444; }
+
+  .solution-col { border-color: rgba(34, 197, 94, 0.2); }
+  .solution-col h3 { color: #86efac; }
+  .solution-col ul li::before { background: #22c55e; }
+
+  /* Slide 3: Features */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-top: 8px;
+  }
+
+  .feature-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 28px;
+    transition: transform 0.2s;
+  }
+
+  .feature-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 16px;
+  }
+
+  .feature-card h4 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #e2e8f0;
+  }
+
+  .feature-card p {
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.5;
+  }
+
+  /* Slide 4: Tech Architecture */
+  .tech-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: calc(100% - 80px);
+  }
+
+  .tech-layer {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .layer-label {
+    min-width: 140px;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .layer-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tag {
+    background: rgba(124, 58, 237, 0.15);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #c4b5fd;
+    white-space: nowrap;
+  }
+
+  .tag.blue {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #93c5fd;
+  }
+
+  .tag.green {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #86efac;
+  }
+
+  .tag.orange {
+    background: rgba(249, 115, 22, 0.15);
+    border-color: rgba(249, 115, 22, 0.3);
+    color: #fdba74;
+  }
+
+  /* Slide 5: Mobile UX */
+  .ux-showcase {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 48px;
+    height: calc(100% - 80px);
+    align-items: center;
+  }
+
+  .phone-frame {
+    width: 200px;
+    height: 400px;
+    background: #1a1040;
+    border: 3px solid #333;
+    border-radius: 24px;
+    padding: 12px 8px;
+    position: relative;
+  }
+
+  .phone-screen {
+    width: 100%;
+    height: 100%;
+    background: #0D0B1A;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 8px;
+  }
+
+  .phone-screen .mini-balance {
+    font-size: 10px;
+    color: #64748b;
+    margin-bottom: 4px;
+  }
+
+  .phone-screen .mini-total {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 12px;
+  }
+
+  .mini-token {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .mini-token-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mini-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+  }
+
+  .mini-token-name { font-size: 9px; color: #94a3b8; }
+  .mini-token-val { font-size: 9px; color: #64748b; }
+
+  .ux-features {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .ux-item {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .ux-num {
+    min-width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #7C3AED, #3B82F6);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .ux-item h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 4px;
+  }
+
+  .ux-item p {
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.5;
+  }
+
+  /* Slide 6: Network Integration */
+  .net-diagram {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    height: calc(100% - 80px);
+  }
+
+  .net-node {
+    text-align: center;
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    min-width: 180px;
+  }
+
+  .net-node-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+  }
+
+  .net-node h4 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 6px;
+  }
+
+  .net-node p {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.4;
+  }
+
+  .net-arrow {
+    font-size: 24px;
+    color: #7C3AED;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .net-arrow span {
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  /* Slide 7: Summary */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 40px;
+  }
+
+  .stat-card {
+    text-align: center;
+    padding: 24px;
+    background: rgba(124, 58, 237, 0.08);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 12px;
+  }
+
+  .stat-num {
+    font-size: 36px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #7C3AED, #3B82F6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .summary-bottom {
+    text-align: center;
+    margin-top: 24px;
+  }
+
+  .summary-bottom h3 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin-bottom: 12px;
+  }
+
+  .summary-bottom p {
+    font-size: 16px;
+    color: #64748b;
+  }
+
+  .summary-links {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 24px;
+  }
+
+  .summary-links a {
+    color: #7C3AED;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 8px 20px;
+    border: 1px solid rgba(124, 58, 237, 0.4);
+    border-radius: 8px;
+  }
+
+  /* Print styles */
+  @media print {
+    body { background: #0D0B1A; }
+    .slide {
+      margin: 0;
+      border-radius: 0;
+      box-shadow: none;
+      page-break-after: always;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- Slide 1: Title -->
+<div class="slide">
+  <div class="slide-content slide-title">
+    <div class="logo-shield">
+      <div class="logo-shield-inner">T</div>
+    </div>
+    <h1>TrustPort</h1>
+    <div class="subtitle">Solana 可信联系人转账钱包</div>
+    <div class="tagline">
+      通过 QR 码建立双向信任关系，安全便捷地向可信联系人转账 SOL 和 SPL 代币。<br>
+      专为 Solana Seeker 手机打造的原生移动体验。
+    </div>
+    <div class="badge">Solana Mobile Hackathon 2026 "CLOCK IN"</div>
+  </div>
+</div>
+
+<!-- Slide 2: Problem & Solution -->
+<div class="slide">
+  <div class="slide-content">
+    <h2>问题与<span>解决方案</span></h2>
+    <div class="two-col">
+      <div class="col-card problem-col">
+        <h3>痛点</h3>
+        <ul>
+          <li>向朋友转账加密货币需要复制粘贴长地址，容易出错</li>
+          <li>无法确认收款方身份，转账给错误地址不可逆</li>
+          <li>现有钱包应用缺少"信任关系"概念，每次转账都是盲转</li>
+          <li>Solana Mobile 生态缺少原生的社交转账体验</li>
+        </ul>
+      </div>
+      <div class="col-card solution-col">
+        <h3>TrustPort 方案</h3>
+        <ul>
+          <li>QR 码互扫 + 口令验证，建立双向可信联系人关系</li>
+          <li>转账时从联系人列表选择，告别复制粘贴地址</li>
+          <li>多钱包适配（Phantom / Seed Vault / 本地），降低使用门槛</li>
+          <li>原生 Android 扫码引擎 + 相册保存，流畅的移动体验</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 3: Core Features -->
+<div class="slide">
+  <div class="slide-content">
+    <h2>核心<span>功能</span></h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(124,58,237,0.2);">🔗</div>
+        <h4>可信联系人</h4>
+        <p>QR 码互扫 + SHA-256 口令验证，建立双向信任关系，联系人本地存储</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(59,130,246,0.2);">💰</div>
+        <h4>多币种管理</h4>
+        <p>SOL + 13+ SPL 代币，实时 USD 估值，24h 涨跌幅，智能过滤空投币</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(34,197,94,0.2);">📸</div>
+        <h4>原生扫码</h4>
+        <p>ZXing 全屏扫码引擎，QR 码生成与相册保存，Android 原生模块</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(249,115,22,0.2);">⚡</div>
+        <h4>极速转账</h4>
+        <p>联系人选择、MAX 一键最大、Solana Explorer 交易追踪</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(236,72,153,0.2);">🔐</div>
+        <h4>多钱包适配</h4>
+        <p>Phantom (MWA)、Seed Vault、本地钱包三种模式，会话持久化</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(168,85,247,0.2);">📊</div>
+        <h4>资产智能展示</h4>
+        <p>DexScreener + CoinGecko 双源价格，Metaplex 链上元数据解析</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 4: Technical Architecture -->
+<div class="slide">
+  <div class="slide-content">
+    <h2>技术<span>架构</span></h2>
+    <div class="tech-layers">
+      <div class="tech-layer">
+        <div class="layer-label" style="color: #c4b5fd;">前端 UI</div>
+        <div class="layer-tags">
+          <span class="tag">React Native 0.73.4</span>
+          <span class="tag">TypeScript</span>
+          <span class="tag">React Navigation v6</span>
+          <span class="tag">8 Screens</span>
+        </div>
+      </div>
+      <div class="tech-layer">
+        <div class="layer-label" style="color: #93c5fd;">链上交互</div>
+        <div class="layer-tags">
+          <span class="tag blue">@solana/web3.js</span>
+          <span class="tag blue">@solana/spl-token</span>
+          <span class="tag blue">Mobile Wallet Adapter</span>
+          <span class="tag blue">Anchor 0.32.1</span>
+        </div>
+      </div>
+      <div class="tech-layer">
+        <div class="layer-label" style="color: #86efac;">数据服务</div>
+        <div class="layer-tags">
+          <span class="tag green">Solana RPC</span>
+          <span class="tag green">DexScreener Batch API</span>
+          <span class="tag green">CoinGecko</span>
+          <span class="tag green">Metaplex PDA</span>
+        </div>
+      </div>
+      <div class="tech-layer">
+        <div class="layer-label" style="color: #fdba74;">原生能力</div>
+        <div class="layer-tags">
+          <span class="tag orange">ZXing QR Scanner</span>
+          <span class="tag orange">MediaStore Save</span>
+          <span class="tag orange">MWA Wallet Discovery</span>
+          <span class="tag orange">Seed Vault</span>
+        </div>
+      </div>
+      <div class="tech-layer">
+        <div class="layer-label" style="color: #fca5a5;">智能合约</div>
+        <div class="layer-tags">
+          <span class="tag" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.3);color:#fca5a5;">Rust / Anchor</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.3);color:#fca5a5;">Devnet Deployed</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.3);color:#fca5a5;">Trust Init + Protected Transfer</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 5: Mobile UX -->
+<div class="slide">
+  <div class="slide-content">
+    <h2>移动端 <span>UX 体验</span></h2>
+    <div class="ux-showcase">
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="mini-balance">Total Balance</div>
+          <div class="mini-total">$3,847.52</div>
+          <div class="mini-token">
+            <div class="mini-token-left">
+              <div class="mini-dot" style="background:#7C3AED;"></div>
+              <span class="mini-token-name">SOL</span>
+            </div>
+            <span class="mini-token-val">$1,875</span>
+          </div>
+          <div class="mini-token">
+            <div class="mini-token-left">
+              <div class="mini-dot" style="background:#3B82F6;"></div>
+              <span class="mini-token-name">USDC</span>
+            </div>
+            <span class="mini-token-val">$1,250</span>
+          </div>
+          <div class="mini-token">
+            <div class="mini-token-left">
+              <div class="mini-dot" style="background:#F97316;"></div>
+              <span class="mini-token-name">BONK</span>
+            </div>
+            <span class="mini-token-val">$525</span>
+          </div>
+          <div class="mini-token">
+            <div class="mini-token-left">
+              <div class="mini-dot" style="background:#14B8A6;"></div>
+              <span class="mini-token-name">JUP</span>
+            </div>
+            <span class="mini-token-val">$197</span>
+          </div>
+        </div>
+      </div>
+      <div class="ux-features">
+        <div class="ux-item">
+          <div class="ux-num">1</div>
+          <div>
+            <h4>Seeker 原生适配</h4>
+            <p>针对 Solana Seeker 手机优化，Seed Vault 深度集成，屏幕尺寸精确适配</p>
+          </div>
+        </div>
+        <div class="ux-item">
+          <div class="ux-num">2</div>
+          <div>
+            <h4>QR 码社交体验</h4>
+            <p>像加好友一样建立信任关系，扫码 + 口令验证，零门槛上手</p>
+          </div>
+        </div>
+        <div class="ux-item">
+          <div class="ux-num">3</div>
+          <div>
+            <h4>极速价格加载</h4>
+            <p>DexScreener 批量查询 + 单遍数据架构，资产估值毫秒级刷新</p>
+          </div>
+        </div>
+        <div class="ux-item">
+          <div class="ux-num">4</div>
+          <div>
+            <h4>智能资产筛选</h4>
+            <p>自动过滤空投垃圾币，支持按价值排序、隐藏零余额、筛选小额资产</p>
+          </div>
+        </div>
+        <div class="ux-item">
+          <div class="ux-num">5</div>
+          <div>
+            <h4>安全转账流程</h4>
+            <p>联系人选择代替地址粘贴，MAX 一键最大金额，交易记录链上可查</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 6: Network Integration -->
+<div class="slide">
+  <div class="slide-content">
+    <h2>网络<span>集成</span></h2>
+    <div class="net-diagram">
+      <div class="net-node">
+        <div class="net-node-icon" style="background: rgba(124,58,237,0.2);">📱</div>
+        <h4>TrustPort App</h4>
+        <p>React Native<br>Android Native Modules</p>
+      </div>
+      <div class="net-arrow">
+        →<span>MWA</span>
+      </div>
+      <div class="net-node">
+        <div class="net-node-icon" style="background: rgba(59,130,246,0.2);">🔐</div>
+        <h4>Wallet Provider</h4>
+        <p>Phantom / Seed Vault<br>签名 & 交易广播</p>
+      </div>
+      <div class="net-arrow">
+        →<span>RPC</span>
+      </div>
+      <div class="net-node">
+        <div class="net-node-icon" style="background: rgba(34,197,94,0.2);">⛓️</div>
+        <h4>Solana Network</h4>
+        <p>Mainnet-beta<br>交易确认 & 状态查询</p>
+      </div>
+    </div>
+    <div style="display: flex; justify-content: center; gap: 32px; margin-top: 32px;">
+      <div class="net-node" style="min-width: 140px;">
+        <h4>DexScreener</h4>
+        <p>批量代币价格</p>
+      </div>
+      <div class="net-node" style="min-width: 140px;">
+        <h4>CoinGecko</h4>
+        <p>基础价格 + 24h</p>
+      </div>
+      <div class="net-node" style="min-width: 140px;">
+        <h4>Metaplex</h4>
+        <p>链上代币元数据</p>
+      </div>
+      <div class="net-node" style="min-width: 140px;">
+        <h4>Solscan</h4>
+        <p>交易详情链接</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 7: Summary & Links -->
+<div class="slide">
+  <div class="slide-content" style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
+    <h2 style="text-align: center;">项目<span>总览</span></h2>
+    <div class="summary-grid">
+      <div class="stat-card">
+        <div class="stat-num">8</div>
+        <div class="stat-label">页面组件</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">3</div>
+        <div class="stat-label">原生模块</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">3</div>
+        <div class="stat-label">钱包模式</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">13+</div>
+        <div class="stat-label">支持代币</div>
+      </div>
+    </div>
+    <div class="summary-bottom">
+      <h3>Built for Solana Mobile</h3>
+      <p>单人开发者 · React Native + Anchor · Solana Seeker 原生体验</p>
+      <div class="summary-links">
+        <a href="https://github.com/zhanyaogithub/TrustPort">GitHub</a>
+        <a href="https://github.com/zhanyaogithub/TrustPort/blob/main/PRIVACY_POLICY.md">Privacy Policy</a>
+        <a href="https://github.com/zhanyaogithub/TrustPort/blob/main/EULA.md">EULA</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
