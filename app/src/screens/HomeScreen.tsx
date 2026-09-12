@@ -53,10 +53,9 @@ export default function HomeScreen({navigation}: Props) {
 
   useEffect(() => {
     const init = async () => {
-      const discoveredMints = await loadAllBalances();
-      await fetchPrices(discoveredMints);
-      // Recalculate total with new prices
-      setTimeout(() => loadAllBalances(), 300);
+      const {mints, symbols} = await loadAllBalances();
+      const priceMap = await fetchPrices(mints, symbols);
+      await loadAllBalances(priceMap);
     };
     init();
 
@@ -67,41 +66,61 @@ export default function HomeScreen({navigation}: Props) {
 
   const trustedCount = contacts.length;
 
-  const fetchPrices = async (mints?: string[]): Promise<{[key: string]: number}> => {
+  // Symbol → CoinGecko ID mapping for dynamic price queries
+  const SYMBOL_TO_CG: {[sym: string]: string} = {
+    SOL: 'solana', WSOL: 'solana', USDC: 'usd-coin', USDT: 'tether',
+    SKR: 'seeker', BIRB: 'birb', BONK: 'bonk1', JUP: 'jupiter-exchange-solana',
+    RAY: 'raydium', WIF: 'dogwifhat', PYTH: 'pyth-network', GMT: 'stepn',
+    GST: 'green-satoshi-token', MSOL: 'msol', STSOL: 'lido-staked-sol',
+    MOONWALK: 'moonwalk-fit', MOON: 'moon-on-sol',
+  };
+
+  const fetchPrices = async (mints?: string[], symbols?: string[]): Promise<{[key: string]: number}> => {
     const p: {[key: string]: number} = {};
     const changes: {[key: string]: number} = {};
 
-    // Run CoinGecko and Jupiter in PARALLEL — one failing doesn't block the other
-    const coinGeckoIds = 'solana,usd-coin,tether,seeker';
+    // Build dynamic CoinGecko query from actual token symbols
+    const cgIds = new Set<string>(['solana', 'usd-coin', 'tether']);
+    if (symbols) {
+      for (const sym of symbols) {
+        const cgId = SYMBOL_TO_CG[sym.toUpperCase()];
+        if (cgId) cgIds.add(cgId);
+      }
+    }
+    const coinGeckoQuery = Array.from(cgIds).join(',');
 
     const fetchCoinGecko = async () => {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         const resp = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coinGeckoIds}&vs_currencies=usd&include_24hr_change=true`,
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coinGeckoQuery}&vs_currencies=usd&include_24hr_change=true`,
           {signal: controller.signal},
         );
         clearTimeout(timeout);
         if (!resp.ok) return;
         const data = await resp.json();
-        if (data?.solana?.usd) {
-          p['SOL'] = data.solana.usd;
-          p['WSOL'] = data.solana.usd;
-          changes['SOL'] = data.solana.usd_24h_change || 0;
-          changes['WSOL'] = data.solana.usd_24h_change || 0;
+        // Map CoinGecko IDs back to symbols
+        const cgToSymbols: {[cgId: string]: string[]} = {};
+        for (const [sym, cgId] of Object.entries(SYMBOL_TO_CG)) {
+          if (!cgToSymbols[cgId]) cgToSymbols[cgId] = [];
+          cgToSymbols[cgId].push(sym);
         }
-        if (data?.['usd-coin']?.usd) {
-          p['USDC'] = data['usd-coin'].usd;
-          changes['USDC'] = data['usd-coin'].usd_24h_change || 0;
-        }
-        if (data?.tether?.usd) {
-          p['USDT'] = data.tether.usd;
-          changes['USDT'] = data.tether.usd_24h_change || 0;
-        }
-        if (data?.seeker?.usd) {
-          p['SKR'] = data.seeker.usd;
-          changes['SKR'] = data.seeker.usd_24h_change || 0;
+        cgToSymbols['solana'] = ['SOL', 'WSOL'];
+        cgToSymbols['usd-coin'] = ['USDC'];
+        cgToSymbols['tether'] = ['USDT'];
+        for (const [cgId, info] of Object.entries(data) as [string, any][]) {
+          if (info?.usd) {
+            const syms = cgToSymbols[cgId] || [];
+            for (const sym of syms) {
+              p[sym] = info.usd;
+            }
+            if (info.usd_24h_change) {
+              for (const sym of syms) {
+                changes[sym] = info.usd_24h_change;
+              }
+            }
+          }
         }
       } catch (e) {}
     };
@@ -121,7 +140,6 @@ export default function HomeScreen({navigation}: Props) {
         if (data?.data) {
           for (const [mint, info] of Object.entries(data.data) as [string, any][]) {
             if (info?.price) {
-              // Jupiter uses mint as key; also map to symbol for TOKEN_META entries
               p[mint] = parseFloat(info.price);
               const meta = TOKEN_META[mint];
               if (meta) { p[meta.symbol] = p[meta.symbol] || p[mint]; }
@@ -131,10 +149,8 @@ export default function HomeScreen({navigation}: Props) {
       } catch (e) {}
     };
 
-    // Execute both in parallel
     await Promise.all([fetchCoinGecko(), fetchJupiter()]);
 
-    // Hardcoded safety net if both APIs failed entirely
     if (!p['SOL'] && !p['WSOL']) { p['SOL'] = 150; p['WSOL'] = 150; }
     if (!p['USDC']) { p['USDC'] = 1; }
     if (!p['USDT']) { p['USDT'] = 1; }
@@ -144,10 +160,11 @@ export default function HomeScreen({navigation}: Props) {
     return p;
   };
 
-  const loadAllBalances = async (priceMap?: {[key: string]: number}): Promise<string[]> => {
-    if (!publicKey) return [];
+  const loadAllBalances = async (priceMap?: {[key: string]: number}): Promise<{mints: string[]; symbols: string[]}> => {
+    if (!publicKey) return {mints: [], symbols: []};
     const p = priceMap || prices;
     const allMints: string[] = [];
+    const allSymbols: string[] = [];
     try {
       // Load SOL balance
       const solBal = await connection.getBalance(publicKey);
@@ -193,6 +210,7 @@ export default function HomeScreen({navigation}: Props) {
           const known = TOKEN_META[mint];
           if (known) {
             tokens.push({mint, symbol: known.symbol, name: known.name, amount, decimals: known.decimals, logoURI: known.logoURI});
+            allSymbols.push(known.symbol);
           } else {
             unknownMints.push({mint, amount, index: tokens.length});
             tokens.push({mint, symbol: mint.slice(0, 4) + '...', name: '加载中...', amount, decimals: 9});
@@ -215,6 +233,7 @@ export default function HomeScreen({navigation}: Props) {
             decimals: meta.decimals,
             logoURI: meta.logoURI || undefined,
           };
+          allSymbols.push(meta.symbol);
         }
         setTokenBalances([...tokens]); // Update with full metadata
       }
@@ -229,7 +248,7 @@ export default function HomeScreen({navigation}: Props) {
     } catch (error: any) {
       console.error('Failed to load balances:', error.message);
     }
-    return allMints;
+    return {mints: allMints, symbols: allSymbols};
   };
 
   const loadBalance = async () => {

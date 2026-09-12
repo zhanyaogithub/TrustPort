@@ -397,6 +397,7 @@ export default function TransferScreen({navigation, route}: Props) {
           <View style={styles.currencyModalContent}>
             <Text style={styles.currencyModalTitle}>选择币种</Text>
 
+            <ScrollView style={{maxHeight: 400}}>
             {tokenBalances.map((token) => (
               <TouchableOpacity
                 key={token.mint}
@@ -428,6 +429,7 @@ export default function TransferScreen({navigation, route}: Props) {
             {tokenBalances.length === 0 && (
               <Text style={styles.noTokensText}>暂无代币</Text>
             )}
+            </ScrollView>
 
             <TouchableOpacity
               style={styles.modalCloseButton}
