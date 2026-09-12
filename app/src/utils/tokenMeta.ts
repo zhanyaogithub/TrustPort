@@ -95,7 +95,7 @@ export async function resolveTokenMeta(mint: string, connection: any): Promise<{
 
   const dec = decimals ?? 9;
   const symbol = metaplex?.symbol || mint.slice(0, 6);
-  const name = metaplex?.name || `Token (${mint.slice(0, 4)}...)`;
+  const name = (metaplex?.name && metaplex.name !== symbol) ? metaplex.name : symbol;
   const logoURI = metaplex?.logoURI || null;
 
   return {symbol, name, decimals: dec, logoURI};

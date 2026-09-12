@@ -53,8 +53,10 @@ export default function HomeScreen({navigation}: Props) {
 
   useEffect(() => {
     const init = async () => {
-      const p = await fetchPrices();
-      await loadAllBalances(p);
+      const discoveredMints = await loadAllBalances();
+      await fetchPrices(discoveredMints);
+      // Recalculate total with new prices
+      setTimeout(() => loadAllBalances(), 300);
     };
     init();
 
@@ -65,38 +67,72 @@ export default function HomeScreen({navigation}: Props) {
 
   const trustedCount = contacts.length;
 
-  const fetchPrices = async (): Promise<{[key: string]: number}> => {
-    try {
-      const resp = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=solana,usd-coin,tether&vs_currencies=usd&include_24hr_change=true'
-      );
-      const data = await resp.json();
-      const p: {[key: string]: number} = {
-        SOL: data?.solana?.usd || 0,
-        USDC: data?.['usd-coin']?.usd || 1,
-        USDT: data?.tether?.usd || 1,
-        WSOL: data?.solana?.usd || 0,
-      };
-      const changes: {[key: string]: number} = {
-        SOL: data?.solana?.usd_24h_change || 0,
-        USDC: data?.['usd-coin']?.usd_24h_change || 0,
-        USDT: data?.tether?.usd_24h_change || 0,
-        WSOL: data?.solana?.usd_24h_change || 0,
-      };
-      setPrices(p);
-      setPriceChanges(changes);
-      return p;
-    } catch (e: any) {
-      const fallback = {SOL: 150, USDC: 1, USDT: 1, WSOL: 150};
-      setPrices(fallback);
-      setPriceChanges({});
-      return fallback;
+  const fetchPrices = async (mints?: string[]): Promise<{[key: string]: number}> => {
+    const p: {[key: string]: number} = {};
+    const changes: {[key: string]: number} = {};
+
+    // 1. Try Jupiter Price API for all token mints (covers any SPL token)
+    if (mints && mints.length > 0) {
+      try {
+        const mintList = mints.join(',');
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const resp = await fetch(
+          `https://api.jup.ag/price/v2?ids=${mintList}`,
+          {signal: controller.signal},
+        );
+        clearTimeout(timeout);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data?.data) {
+            for (const [mint, info] of Object.entries(data.data) as [string, any][]) {
+              if (info?.price) {
+                p[mint] = parseFloat(info.price);
+              }
+            }
+          }
+        }
+      } catch (e) {}
     }
+
+    // 2. Fallback: CoinGecko for SOL/USDC/USDT (in case Jupiter fails)
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const resp = await fetch(
+        'https://api.coingecko.com/api/v3/simple/price?ids=solana,usd-coin,tether&vs_currencies=usd&include_24hr_change=true',
+        {signal: controller.signal},
+      );
+      clearTimeout(timeout);
+      const data = await resp.json();
+      // Map to symbol-based keys for backward compat
+      const solPrice = data?.solana?.usd || p['So11111111111111111111111111111111111111112'] || 0;
+      const usdcPrice = data?.['usd-coin']?.usd || p['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'] || 1;
+      const usdtPrice = data?.tether?.usd || p['Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'] || 1;
+      // Set symbol-based keys (used by UI)
+      p['SOL'] = p['SOL'] || solPrice;
+      p['USDC'] = p['USDC'] || usdcPrice;
+      p['USDT'] = p['USDT'] || usdtPrice;
+      p['WSOL'] = p['WSOL'] || solPrice;
+      changes['SOL'] = data?.solana?.usd_24h_change || 0;
+      changes['USDC'] = data?.['usd-coin']?.usd_24h_change || 0;
+      changes['USDT'] = data?.tether?.usd_24h_change || 0;
+      changes['WSOL'] = data?.solana?.usd_24h_change || 0;
+    } catch (e: any) {
+      if (!p['SOL']) {
+        p['SOL'] = 150; p['USDC'] = 1; p['USDT'] = 1; p['WSOL'] = 150;
+      }
+    }
+
+    setPrices(p);
+    setPriceChanges(changes);
+    return p;
   };
 
-  const loadAllBalances = async (priceMap?: {[key: string]: number}) => {
-    if (!publicKey) return;
+  const loadAllBalances = async (priceMap?: {[key: string]: number}): Promise<string[]> => {
+    if (!publicKey) return [];
     const p = priceMap || prices;
+    const allMints: string[] = [];
     try {
       // Load SOL balance
       const solBal = await connection.getBalance(publicKey);
@@ -138,6 +174,7 @@ export default function HomeScreen({navigation}: Props) {
       const unknownMints: {mint: string; amount: number; index: number}[] = [];
       for (const [mint, amount] of Object.entries(tokenMap)) {
         if (amount > 0) {
+          allMints.push(mint);
           const known = TOKEN_META[mint];
           if (known) {
             tokens.push({mint, symbol: known.symbol, name: known.name, amount, decimals: known.decimals, logoURI: known.logoURI});
@@ -167,24 +204,17 @@ export default function HomeScreen({navigation}: Props) {
         setTokenBalances([...tokens]); // Update with full metadata
       }
 
-      // Filter out completely unknown tokens (can't resolve name from any source)
-      const knownTokens = tokens.filter(t => {
-        if (t.mint === 'native') return true;
-        if (!t.name.endsWith('...')) return true;
-        return false;
-      });
-      setTokenBalances(knownTokens);
-
-      // Calculate total USD value (SOL is already in tokens array)
+      // Calculate total USD value (check price by mint address first, then by symbol)
       let total = 0;
-      for (const token of knownTokens) {
-        const tokenPrice = p[token.symbol] || 0;
+      for (const token of tokens) {
+        const tokenPrice = p[token.mint] || p[token.symbol] || 0;
         total += token.amount * tokenPrice;
       }
       setTotalUsd(total);
     } catch (error: any) {
       console.error('Failed to load balances:', error.message);
     }
+    return allMints;
   };
 
   const loadBalance = async () => {
@@ -252,18 +282,19 @@ export default function HomeScreen({navigation}: Props) {
 
   const filteredTokens = React.useMemo(() => {
     let list = [...tokenBalances];
+    const getPrice = (t: typeof list[0]) => prices[t.mint] || prices[t.symbol] || 0;
     switch (assetFilter) {
       case 'hide_dust_1':
-        list = list.filter(t => (t.amount * (prices[t.symbol] || 0)) >= 1);
+        list = list.filter(t => (t.amount * getPrice(t)) >= 1);
         break;
       case 'hide_dust_10':
-        list = list.filter(t => (t.amount * (prices[t.symbol] || 0)) >= 10);
+        list = list.filter(t => (t.amount * getPrice(t)) >= 10);
         break;
       case 'hide_zero':
         list = list.filter(t => t.amount > 0);
         break;
       case 'sort_value':
-        list = list.sort((a, b) => (b.amount * (prices[b.symbol] || 0)) - (a.amount * (prices[a.symbol] || 0)));
+        list = list.sort((a, b) => (b.amount * getPrice(b)) - (a.amount * getPrice(a)));
         break;
     }
     return list;
@@ -345,9 +376,9 @@ export default function HomeScreen({navigation}: Props) {
               </View>
               <View style={styles.tokenRight}>
                 <Text style={styles.tokenUsd}>
-                  ${(token.amount * (prices[token.symbol] || 0)).toFixed(2)}
+                  ${(token.amount * (prices[token.mint] || prices[token.symbol] || 0)).toFixed(2)}
                 </Text>
-                {priceChanges[token.symbol] !== undefined && priceChanges[token.symbol] !== 0 && (
+                {(priceChanges[token.symbol] !== undefined && priceChanges[token.symbol] !== 0) && (
                   <Text style={[
                     styles.priceChange,
                     priceChanges[token.symbol] >= 0 ? styles.priceChangeUp : styles.priceChangeDown,
