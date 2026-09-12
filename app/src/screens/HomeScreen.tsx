@@ -33,6 +33,7 @@ interface TokenBalance {
   amount: number;
   decimals: number;
   logoURI?: string;
+  price?: number;
 }
 
 export default function HomeScreen({navigation}: Props) {
@@ -53,9 +54,7 @@ export default function HomeScreen({navigation}: Props) {
 
   useEffect(() => {
     const init = async () => {
-      const {mints, symbols} = await loadAllBalances();
-      const priceMap = await fetchPrices(mints, symbols);
-      await loadAllBalances(priceMap);
+      await loadAllBalances();
     };
     init();
 
@@ -70,13 +69,13 @@ export default function HomeScreen({navigation}: Props) {
     const p: {[key: string]: number} = {};
     const changes: {[key: string]: number} = {};
 
-    // All three sources run in parallel — no hardcoded symbol mappings needed
+    const realMints = (mints || []).filter(m => m !== 'native');
 
-    // 1. CoinGecko simple/price for SOL + stablecoins (always included)
+    // 1. CoinGecko basic — SOL + stablecoins (single request)
     const fetchBasicPrices = async () => {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
+        const timeout = setTimeout(() => controller.abort(), 5000);
         const resp = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=solana,usd-coin,tether&vs_currencies=usd&include_24hr_change=true',
           {signal: controller.signal},
@@ -94,57 +93,59 @@ export default function HomeScreen({navigation}: Props) {
       } catch (e) {}
     };
 
-    // 2. Jupiter Price API — covers any token with DEX liquidity (generic, by mint)
-    const fetchJupiterPrices = async () => {
-      if (!mints || mints.length === 0) return;
+    // 2. DexScreener — batch query all mints in ONE request
+    const fetchDexScreenerBatch = async () => {
+      if (realMints.length === 0) return;
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
+        const timeout = setTimeout(() => controller.abort(), 8000);
         const resp = await fetch(
-          `https://api.jup.ag/price/v2?ids=${mints.join(',')}`,
+          `https://api.dexscreener.com/tokens/v1/solana/${realMints.join(',')}`,
           {signal: controller.signal},
         );
         clearTimeout(timeout);
         if (!resp.ok) return;
         const data = await resp.json();
-        if (data?.data) {
-          for (const [mint, info] of Object.entries(data.data) as [string, any][]) {
-            if (info?.price) {
-              p[mint] = parseFloat(info.price);
-              const meta = TOKEN_META[mint];
-              if (meta) { p[meta.symbol] = p[meta.symbol] || p[mint]; }
+
+        // Handle both array and object response formats
+        const pairs: any[] = [];
+        if (Array.isArray(data)) {
+          pairs.push(...data);
+        } else if (data?.pairs) {
+          pairs.push(...data.pairs);
+        } else if (typeof data === 'object') {
+          for (const tokenPairs of Object.values(data)) {
+            if (Array.isArray(tokenPairs)) {
+              pairs.push(...(tokenPairs as any[]));
             }
           }
         }
-      } catch (e) {}
-    };
 
-    // 3. CoinGecko contract endpoint — generic, works by mint address for ANY Solana token
-    const fetchCoinGeckoContracts = async () => {
-      if (!mints || mints.length === 0) return;
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-        const resp = await fetch(
-          `https://api.coingecko.com/api/v3/simple/token_price/solana?contract_addresses=${mints.join(',')}&vs_currencies=usd`,
-          {signal: controller.signal},
-        );
-        clearTimeout(timeout);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        for (const [addr, info] of Object.entries(data) as [string, any][]) {
-          if (info?.usd) {
-            p[addr] = p[addr] || info.usd; // Don't overwrite Jupiter prices
+        // Group pairs by baseToken address and pick highest liquidity per token
+        const byBase: {[addr: string]: any[]} = {};
+        for (const pair of pairs) {
+          const base = pair?.baseToken?.address;
+          if (base) {
+            if (!byBase[base]) byBase[base] = [];
+            byBase[base].push(pair);
+          }
+        }
+        for (const [addr, tokenPairs] of Object.entries(byBase)) {
+          const best = tokenPairs.sort((a: any, b: any) =>
+            (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0)
+          )[0];
+          const price = parseFloat(best.priceUsd);
+          if (price > 0 && !isNaN(price)) {
+            p[addr] = price;
             const meta = TOKEN_META[addr];
-            if (meta) { p[meta.symbol] = p[meta.symbol] || info.usd; }
+            if (meta) { p[meta.symbol] = p[meta.symbol] || price; }
           }
         }
       } catch (e) {}
     };
 
-    await Promise.all([fetchBasicPrices(), fetchJupiterPrices(), fetchCoinGeckoContracts()]);
+    await Promise.all([fetchBasicPrices(), fetchDexScreenerBatch()]);
 
-    // Safety net if all APIs failed
     if (!p['SOL'] && !p['WSOL']) { p['SOL'] = 150; p['WSOL'] = 150; }
     if (!p['USDC']) { p['USDC'] = 1; }
     if (!p['USDT']) { p['USDT'] = 1; }
@@ -154,11 +155,8 @@ export default function HomeScreen({navigation}: Props) {
     return p;
   };
 
-  const loadAllBalances = async (priceMap?: {[key: string]: number}): Promise<{mints: string[]; symbols: string[]}> => {
-    if (!publicKey) return {mints: [], symbols: []};
-    const p = priceMap || prices;
-    const allMints: string[] = [];
-    const allSymbols: string[] = [];
+  const loadAllBalances = async (): Promise<void> => {
+    if (!publicKey) return;
     try {
       // Load SOL balance
       const solBal = await connection.getBalance(publicKey);
@@ -175,18 +173,17 @@ export default function HomeScreen({navigation}: Props) {
             if (info?.mint && info?.tokenAmount) {
               const mint = info.mint;
               const amount = info.tokenAmount.uiAmount || 0;
-              // If same mint exists in both programs, sum them
               tokenMap[mint] = (tokenMap[mint] || 0) + amount;
             }
           }
-        } catch (e: any) {
-          // Token program query error, continue to next program
-        }
+        } catch (e: any) {}
       }
 
       // Build token list: show instantly, resolve unknown metadata in parallel
       const tokens: TokenBalance[] = [];
-      // Add SOL as first token (known metadata)
+      const allMints: string[] = [];
+      const allSymbols: string[] = [];
+
       tokens.push({
         mint: 'native',
         symbol: 'SOL',
@@ -196,7 +193,6 @@ export default function HomeScreen({navigation}: Props) {
         logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
       });
 
-      // Add SPL tokens: known instantly, unknown as placeholder
       const unknownMints: {mint: string; amount: number; index: number}[] = [];
       for (const [mint, amount] of Object.entries(tokenMap)) {
         if (amount > 0) {
@@ -212,9 +208,9 @@ export default function HomeScreen({navigation}: Props) {
         }
       }
 
-      setTokenBalances([...tokens]); // Show immediately
+      setTokenBalances([...tokens]); // Show tokens immediately
 
-      // Phase 2: Resolve unknown metadata in parallel
+      // Resolve unknown metadata in parallel
       if (unknownMints.length > 0) {
         const results = await Promise.all(unknownMints.map(u => resolveTokenMeta(u.mint, connection)));
         for (let i = 0; i < unknownMints.length; i++) {
@@ -229,20 +225,27 @@ export default function HomeScreen({navigation}: Props) {
           };
           allSymbols.push(meta.symbol);
         }
-        setTokenBalances([...tokens]); // Update with full metadata
+        setTokenBalances([...tokens]); // Update with metadata
       }
 
-      // Calculate total USD value (check price by mint address first, then by symbol)
+      // Fetch prices using collected mints
+      const p = await fetchPrices(allMints, allSymbols);
+
+      // Attach prices to tokens and calculate total
       let total = 0;
       for (const token of tokens) {
-        const tokenPrice = p[token.mint] || p[token.symbol] || 0;
+        const isKnown = !!TOKEN_META[token.mint] || token.mint === 'native';
+        const tokenPrice = isKnown
+          ? (p[token.symbol] || p[token.mint] || 0)
+          : (p[token.mint] || p[token.symbol] || 0);
+        token.price = tokenPrice;
         total += token.amount * tokenPrice;
       }
+      setTokenBalances([...tokens]);
       setTotalUsd(total);
     } catch (error: any) {
       console.error('Failed to load balances:', error.message);
     }
-    return {mints: allMints, symbols: allSymbols};
   };
 
   const loadBalance = async () => {
@@ -251,8 +254,7 @@ export default function HomeScreen({navigation}: Props) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([loadBalance(), fetchPrices()]);
-    setTimeout(() => loadAllBalances(), 500);
+    await loadAllBalances();
     setRefreshing(false);
   };
 
@@ -310,23 +312,23 @@ export default function HomeScreen({navigation}: Props) {
 
   const filteredTokens = React.useMemo(() => {
     let list = [...tokenBalances];
-    const getPrice = (t: typeof list[0]) => prices[t.mint] || prices[t.symbol] || 0;
+    const getUsd = (t: typeof list[0]) => t.amount * (t.price || 0);
     switch (assetFilter) {
       case 'hide_dust_1':
-        list = list.filter(t => (t.amount * getPrice(t)) >= 1);
+        list = list.filter(t => getUsd(t) >= 1);
         break;
       case 'hide_dust_10':
-        list = list.filter(t => (t.amount * getPrice(t)) >= 10);
+        list = list.filter(t => getUsd(t) >= 10);
         break;
       case 'hide_zero':
-        list = list.filter(t => t.amount > 0);
+        list = list.filter(t => t.price && getUsd(t) > 0);
         break;
       case 'sort_value':
-        list = list.sort((a, b) => (b.amount * getPrice(b)) - (a.amount * getPrice(a)));
+        list = list.sort((a, b) => getUsd(b) - getUsd(a));
         break;
     }
     return list;
-  }, [tokenBalances, assetFilter, prices]);
+  }, [tokenBalances, assetFilter]);
 
   const currentFilterLabel = FILTER_OPTIONS.find(f => f.key === assetFilter)?.label || '全部显示';
 
@@ -404,9 +406,7 @@ export default function HomeScreen({navigation}: Props) {
               </View>
               <View style={styles.tokenRight}>
                 <Text style={styles.tokenUsd}>
-                  {(prices[token.mint] || prices[token.symbol])
-                    ? `$${(token.amount * (prices[token.mint] || prices[token.symbol] || 0)).toFixed(2)}`
-                    : '—'}
+                  {token.price ? `$${(token.amount * token.price).toFixed(2)}` : '—'}
                 </Text>
                 {(priceChanges[token.symbol] !== undefined && priceChanges[token.symbol] !== 0) && (
                   <Text style={[
@@ -568,6 +568,7 @@ export default function HomeScreen({navigation}: Props) {
           <View style={styles.currencyModalContent}>
             <Text style={styles.currencyModalTitle}>选择币种</Text>
 
+            <ScrollView style={{maxHeight: 400}}>
             {tokenBalances.map((token) => (
               <TouchableOpacity
                 key={token.mint}
@@ -599,6 +600,7 @@ export default function HomeScreen({navigation}: Props) {
             {tokenBalances.length === 0 && (
               <Text style={styles.noTokensText}>暂无代币</Text>
             )}
+            </ScrollView>
 
             <TouchableOpacity
               style={styles.modalCloseButton}
