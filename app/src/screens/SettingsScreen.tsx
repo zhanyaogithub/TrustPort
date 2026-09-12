@@ -81,6 +81,26 @@ export default function SettingsScreen({navigation}: Props) {
             <Text style={styles.settingLabel}>GitHub 仓库</Text>
             <Text style={styles.settingArrow}>›</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() =>
+              Linking.openURL(
+                'https://github.com/zhanyaogithub/TrustPort/blob/main/PRIVACY_POLICY.md',
+              )
+            }>
+            <Text style={styles.settingLabel}>隐私政策</Text>
+            <Text style={styles.settingArrow}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() =>
+              Linking.openURL(
+                'https://github.com/zhanyaogithub/TrustPort/blob/main/EULA.md',
+              )
+            }>
+            <Text style={styles.settingLabel}>用户协议</Text>
+            <Text style={styles.settingArrow}>›</Text>
+          </TouchableOpacity>
           <View style={styles.settingItem}>
             <Text style={styles.settingLabel}>版本</Text>
             <Text style={styles.settingValue}>0.1.0</Text>
