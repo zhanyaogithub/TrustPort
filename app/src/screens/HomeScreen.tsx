@@ -376,7 +376,9 @@ export default function HomeScreen({navigation}: Props) {
               </View>
               <View style={styles.tokenRight}>
                 <Text style={styles.tokenUsd}>
-                  ${(token.amount * (prices[token.mint] || prices[token.symbol] || 0)).toFixed(2)}
+                  {(prices[token.mint] || prices[token.symbol])
+                    ? `$${(token.amount * (prices[token.mint] || prices[token.symbol] || 0)).toFixed(2)}`
+                    : '—'}
                 </Text>
                 {(priceChanges[token.symbol] !== undefined && priceChanges[token.symbol] !== 0) && (
                   <Text style={[
